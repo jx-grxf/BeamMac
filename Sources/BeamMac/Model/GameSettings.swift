@@ -21,8 +21,8 @@ enum Profile: String, CaseIterable, Identifiable {
 
   var caption: String {
     switch self {
-    case .smooth: "120 fps, niedrige Details, keine Effekte, kein Verkehr. Für die geringste Verzögerung."
-    case .balanced: "60 fps, normale Details, Spiegel an, wenig Verkehr."
+    case .smooth: "60 fps, niedrige Details, keine Spiegel und Effekte, kein Verkehr."
+    case .balanced: "Gleichmäßige 40 fps, normale Details, wenig Verkehr. Rückspiegel aus, weil sie die CPU am meisten kosten."
     case .pretty: "60 fps, hohe Details, alle Effekte, etwas Verkehr."
     case .custom: "Eigene Werte von der Seite Spiel."
     }
@@ -128,7 +128,9 @@ final class GameSettings {
     defer { applying = false }
     switch profile {
     case .smooth:
-      launch.frameLimit = 120
+      // BeamNG's main thread runs under Rosetta and stays well below 120 fps
+      // even at low details, so 120 only produces uneven frames.
+      launch.frameLimit = 60
       quality = .low
       ambientOcclusion = false
       depthOfField = false
@@ -142,13 +144,15 @@ final class GameSettings {
       trafficCars = 2
       parkedCars = 0
     case .balanced:
-      launch.frameLimit = 60
+      launch.frameLimit = LaunchSettings.steadyFrameLimit
       quality = .normal
       ambientOcclusion = false
       depthOfField = false
       motionBlur = false
       screenSpaceShadows = true
-      mirrors = true
+      // Mirrors draw the scene a second time, all of it on the main thread
+      // that already limits the frame rate.
+      mirrors = false
       reflections = false
       grassDensity = 0.5
       renderScale = 0.5
@@ -206,14 +210,16 @@ final class GameSettings {
     }
 
     let size = Self.screenSize
-    let pixels = launch.upscaler.rendersInPixels ? Self.backingScale : 1
+    // Wine runs without Retina mode, so the game only gets pixels where the
+    // BeamNG upscaler mode asks for them; the stock run stays at points.
+    let pixels = launch.gamePack && launch.upscaler == .game ? Self.backingScale : 1
     values["GraphicOverallQuality"] = "Custom"
     values["GraphicDisplayModes"] = displayMode.rawValue
     values["GraphicDisplayResolutions"] = "\(Int(Double(size.width) * pixels)) \(Int(Double(size.height) * pixels))"
     // BeamNG caps its HTML UI at 1080 lines by default and stretches it above
     // that, which blurs every menu on a Retina panel.
-    values["uiUpscaling"] = 0
-    switch launch.upscaler {
+    values["uiUpscaling"] = launch.gamePack ? 0 : 1080
+    switch launch.gamePack ? launch.upscaler : .off {
     case .game:
       // DLSS goes through DXMT's NV extension to MetalFX's temporal scaler.
       // Without it BeamNG picks the next temporal upscaler on its own.
@@ -240,8 +246,9 @@ final class GameSettings {
     values["trafficParkedAmount"] = max(parkedCars, 1)
     // DXMT paces frames through Metal; the game's own limiter and vsync only
     // add latency on top. Other backends fall back to the game's limiter.
-    values["vsync"] = false
-    let gameLimiter = launch.backend != .dxmt && launch.frameLimit > 0
+    // Without the pack the game limits and syncs itself, as it would under plain Wine.
+    values["vsync"] = !launch.gamePack
+    let gameLimiter = (launch.backend != .dxmt || !launch.gamePack) && launch.frameLimit > 0
     values["fpsLimitEnabled"] = gameLimiter
     if gameLimiter { values["fpsLimit"] = launch.frameLimit }
 

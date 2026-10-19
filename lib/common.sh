@@ -29,9 +29,11 @@ TEMPLATE_URL="https://github.com/Sikarugir-App/Wrapper/releases/download/v1.0/Te
 TEMPLATE_SHA="4b5f89eeb9ef139936bdfad33d9b420b05ea4597cb7d63376674f7a8e171321c"
 # DXMT from its main branch: the build inside the template crashes BeamNG 0.40
 # while a level loads (a command helper used its device before it was set).
-DXMT_VERSION="v0.80-266-g50102f9"
-DXMT_URL="https://github.com/jx-grxf/BeamMac/releases/download/dxmt-50102f9/dxmt-50102f9.tar.xz"
-DXMT_SHA="4d1df6e15257b069cf6af6fffd73a96456a503b6e21e2ec3f675672367bd7551"
+# On top of it the fork's dxgi.maxFrameLatency, which overrides how many frames
+# the game lets the CPU queue ahead of the GPU.
+DXMT_VERSION="v0.80-267-ga945c2b"
+DXMT_URL="https://github.com/jx-grxf/BeamMac/releases/download/dxmt-a945c2b/dxmt-a945c2b.tar.xz"
+DXMT_SHA="5fa213a805298ee3a2f3e5c531602106d68563043c09009e13659233673388c8"
 STEAM_SETUP_URL="https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe"
 
 # dxmt: DXMT for BeamNG, Steam on wined3d
@@ -39,11 +41,16 @@ STEAM_SETUP_URL="https://cdn.cloudflare.steamstatic.com/client/installer/SteamSe
 # wined3d: plain Wine OpenGL path, only for comparison
 BACKEND="${BEAMNG_BACKEND:-dxmt}"
 UPSCALER="${BEAMNG_UPSCALER:-metalfx}"
+# The BeamMac Game Pack: MSync, AVX for Rosetta and no Steam overlay here,
+# MetalFX, frame pacing and low latency through the DXMT config the app writes.
+# 0 starts the game the way Wine alone would, to compare against.
+PACK="${BEAMNG_PACK:-1}"
 
 # Each engine is an app bundle: macOS only enables Game Mode (CPU and GPU
 # priority, faster Bluetooth polling for controllers) for a process it can tie
 # to an app in the games category. DXMT replaces the builtin d3d11/dxgi of the
 # main engine, so the other two backends run from APFS clones with their own DLLs.
+
 engine_dir() {
   case "$1" in
     d3dmetal) echo "$ENGINES/BeamNG D3DMetal.app/Contents" ;;
@@ -127,7 +134,6 @@ wine_env() {
   export WINEPREFIX="$PREFIX"
   # Errors stay on: they are rare, and without them a crash leaves no trace.
   export WINEDEBUG="${WINEDEBUG:-fixme-all}"
-  export WINEMSYNC=1
   # The engine binaries have no rpath; Sikarugir's launcher resolves its
   # dylibs the same way. Calling wine through /usr/bin/arch would strip this.
   export DYLD_FALLBACK_LIBRARY_PATH="$ENGINES/frameworks:$ENGINES/frameworks/GStreamer.framework/Libraries:/usr/lib"
@@ -148,10 +154,13 @@ wine_env() {
     *) export DXMT_METALFX_SPATIAL_SWAPCHAIN=0 ;;
   esac
   export MTL_HUD_ENABLED="${BEAMNG_HUD:-0}"
-  export ROSETTA_ADVERTISE_AVX=1
-  # Steam injects its overlay into the game and hooks every Present, which
-  # costs frame time; Steam ignores its own per-game switch for it.
-  export WINEDLLOVERRIDES="gameoverlayrenderer,gameoverlayrenderer64=d;${WINEDLLOVERRIDES:-}"
+  if [[ "$PACK" == 1 ]]; then
+    export WINEMSYNC=1
+    export ROSETTA_ADVERTISE_AVX=1
+    # Steam injects its overlay into the game and hooks every Present, which
+    # costs frame time; Steam ignores its own per-game switch for it.
+    export WINEDLLOVERRIDES="gameoverlayrenderer,gameoverlayrenderer64=d;${WINEDLLOVERRIDES:-}"
+  fi
   case "$backend" in
     d3dmetal|wined3d) export WINEDLLOVERRIDES="d3d11,dxgi,d3d10core=b;${WINEDLLOVERRIDES:-}" ;;
   esac

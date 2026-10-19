@@ -79,6 +79,7 @@ struct ProcessSnapshot {
   var steam = false
   var game = false
   var launcher: pid_t?
+  var beammp = false
 
   static func capture(home: BeamMacHome) -> ProcessSnapshot {
     let process = Process()
@@ -100,13 +101,16 @@ struct ProcessSnapshot {
     var ownServer = false
     var game = false
     var launcher: pid_t?
+  var beammp = false
     for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
       let trimmed = line.drop { $0 == " " }
       guard let space = trimmed.firstIndex(of: " ") else { continue }
       let command = trimmed[space...]
       if command.contains(engines) && command.contains("wineserver") { ownServer = true }
       if command.contains(steamExe) { snapshot.steam = true }
-      if command.localizedCaseInsensitiveContains("BeamNG.drive.x64.exe") {
+      if command.localizedCaseInsensitiveContains("BeamMP-Launcher.exe") {
+        snapshot.beammp = true
+      } else if command.localizedCaseInsensitiveContains("BeamNG.drive.x64.exe") {
         game = true
       } else if command.localizedCaseInsensitiveContains("\\BeamNG.drive.exe") {
         launcher = pid_t(trimmed[..<space])

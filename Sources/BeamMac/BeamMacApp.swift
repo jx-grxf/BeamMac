@@ -19,6 +19,9 @@ struct BeamMacApp: App {
         Button("Fahren") { Task { await model.drive() } }
           .keyboardShortcut("r")
           .disabled(!model.gameInstalled || model.runner.isBusy)
+        Button("Mit BeamMP fahren") { Task { await model.driveOnline() } }
+          .keyboardShortcut("r", modifiers: [.command, .shift])
+          .disabled(!model.gameInstalled || model.runner.isBusy)
         Button("Steam öffnen") { Task { await model.openSteam() } }
           .keyboardShortcut("s", modifiers: [.command, .shift])
           .disabled(!model.isSetUp || model.runner.isBusy)

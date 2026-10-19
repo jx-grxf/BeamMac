@@ -27,6 +27,16 @@ struct DriveView: View {
       }
 
       Section {
+        Toggle(isOn: $settings.gamePack) {
+          Text("BeamMac Game Pack")
+          Text(settings.gamePack
+            ? "Niedrige Latenz, MetalFX, Bildtakt über Metal, MSync und kein Steam-Overlay."
+            : "Aus: BeamNG startet so, wie Wine es ohne Anpassungen tun würde. Gut zum Vergleichen.")
+        }
+        .toggleStyle(.switch)
+      }
+
+      Section {
         VStack(alignment: .leading, spacing: Theme.s2) {
           Picker("Profil", selection: profile) {
             ForEach(Profile.allCases) { Text($0.title).tag($0) }
@@ -130,6 +140,9 @@ private struct HeroRow: View {
       } else if !model.gameRunning && !model.launcherRunning && model.launchStarted == nil
         && model.transfer == nil && !model.steamBootstrapping
       {
+        Button("BeamMP") { Task { await model.driveOnline() } }
+          .disabled(busy)
+          .help("Mit dem BeamMP-Launcher starten, für Multiplayer-Server")
         Button("Fahren") { Task { await model.drive() } }
           .buttonStyle(DriveButtonStyle())
           .disabled(busy)
@@ -151,7 +164,9 @@ private struct StatusLabel: View {
   }
 
   private var state: (String, String, Color) {
-    if model.gameRunning { return ("BeamNG läuft", "play.circle.fill", .green) }
+    if model.gameRunning {
+      return (model.beammpRunning ? "BeamNG läuft mit BeamMP" : "BeamNG läuft", "play.circle.fill", .green)
+    }
     if !model.isSetUp { return ("Noch nicht eingerichtet", "exclamationmark.triangle.fill", .orange) }
     if let transfer = model.transfer { return (Self.describe(transfer), "arrow.down.circle.fill", .secondary) }
     if !model.gameInstalled {

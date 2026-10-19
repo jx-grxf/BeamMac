@@ -11,11 +11,12 @@ struct GameView: View {
     Form {
       Section {
         Picker(selection: $launch.upscaler) {
-          ForEach(Upscaler.allCases) { Text($0.title).tag($0) }
+          ForEach(Upscaler.choices) { Text($0.title).tag($0) }
         } label: {
           Text("Hochskalierung")
           Text(launch.upscaler.caption)
         }
+        .disabled(!launch.gamePack)
 
         if launch.upscaler == .game {
           LabeledContent {
@@ -38,8 +39,15 @@ struct GameView: View {
           }
         } label: {
           Text("Bildraten-Limit")
-          Text("120 fps halbieren die Verzögerung pro Bild, brauchen aber Frame-Zeiten unter 8 ms.")
+          Text("Wähle ein Limit, das das Spiel immer hält. 40 fps laufen auf 120 Hz gleichmäßiger als schwankende 50.")
         }
+
+        Toggle(isOn: $launch.lowLatency) {
+          Text("Niedrige Latenz")
+          Text("Die CPU rechnet höchstens zwei statt drei Bilder voraus. Lenken und Gas kommen früher auf den Bildschirm.")
+        }
+        .toggleStyle(.switch)
+        .disabled(launch.backend != .dxmt || !launch.gamePack)
 
         Picker(selection: $game.displayMode) {
           ForEach(DisplayMode.allCases) { Text($0.title).tag($0) }
@@ -50,7 +58,11 @@ struct GameView: View {
       } header: {
         Text("Bild")
       } footer: {
-        if launch.backend != .dxmt && launch.upscaler != .off {
+        if !launch.gamePack {
+          Text("Hochskalierung und niedrige Latenz gehören zum Game Pack, das gerade aus ist.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } else if launch.backend != .dxmt && launch.upscaler != .off {
           Text("Die Hochskalierung über Metal gibt es nur mit DXMT.")
             .font(.caption)
             .foregroundStyle(.secondary)

@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Usage: bin/beammp install|start|status
+#   install  lädt den neuesten BeamMP-Launcher von GitHub (höchstens einmal am Tag)
+#   start    startet ihn ohne Spiel; danach BeamNG normal über Steam starten
+source "$(dirname "$0")/../lib/common.sh"
+
+BEAMMP_DIR="$PREFIX/drive_c/users/$USER/AppData/Roaming/BeamMP-Launcher"
+BEAMMP_EXE="$BEAMMP_DIR/BeamMP-Launcher.exe"
+BEAMMP_API="https://api.github.com/repos/BeamMP/BeamMP-Launcher/releases/latest"
+
+launcher_running() { pgrep -qf 'BeamMP-Launcher\.exe'; }
+
+install_launcher() {
+  local stamp="$DATA/beammp-checked"
+  if [[ -f "$BEAMMP_EXE" && -n "$(find "$stamp" -mtime -1 2>/dev/null)" ]]; then
+    return 0
+  fi
+  local release="$DATA/beammp-release.json" tag
+  if ! curl -fsSL -o "$release" "$BEAMMP_API"; then
+    [[ -f "$BEAMMP_EXE" ]] && { log "GitHub nicht erreichbar, nehme den installierten Launcher"; return 0; }
+    die "BeamMP-Launcher konnte nicht geladen werden"
+  fi
+  tag="$(plutil -extract tag_name raw -o - "$release")"
+  if [[ -f "$BEAMMP_EXE" && "$(cat "$BEAMMP_DIR/beammac-version" 2>/dev/null)" == "$tag" ]]; then
+    touch "$stamp"
+    return 0
+  fi
+  local base="https://github.com/BeamMP/BeamMP-Launcher/releases/download/$tag"
+  local sha
+  sha="$(curl -fsSL "$base/BeamMP-Launcher.exe.sha256" | cut -c1-64)"
+  [[ ${#sha} -eq 64 ]] || die "Keine Prüfsumme für BeamMP $tag"
+  rm -f "$DOWNLOADS/beammp/BeamMP-Launcher.exe"
+  fetch "$base/BeamMP-Launcher.exe" "$sha" "$DOWNLOADS/beammp/BeamMP-Launcher.exe"
+  mkdir -p "$BEAMMP_DIR"
+  cp "$DOWNLOADS/beammp/BeamMP-Launcher.exe" "$BEAMMP_EXE"
+  echo "$tag" >"$BEAMMP_DIR/beammac-version"
+  touch "$stamp"
+  log "BeamMP-Launcher $tag installiert"
+}
+
+# The launcher must run before the game loads: the BeamMP mod connects to it on
+# port 4444 while the main menu comes up. --no-launch because the launcher would
+# start BeamNG.drive.exe itself, which hands over to Steam and exits, and the
+# launcher quits with it. Updates come from install_launcher.
+start_launcher() {
+  if launcher_running; then
+    log "BeamMP-Launcher läuft schon"
+    return 0
+  fi
+  install_launcher
+  mkdir -p "$DATA/logs"
+  log "Starte BeamMP-Launcher"
+  (cd "$BEAMMP_DIR" && run_wine "$BACKEND" "$BEAMMP_EXE" --no-launch --no-update >"$DATA/logs/beammp.log" 2>&1 &)
+  local i
+  for i in $(seq 1 30); do
+    lsof -nP -iTCP:4444 -sTCP:LISTEN >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  die "BeamMP-Launcher lauscht nicht auf Port 4444, siehe $DATA/logs/beammp.log"
+}
+
+case "${1:-}" in
+  install) install_launcher ;;
+  start) start_launcher ;;
+  status) launcher_running && echo "läuft" || echo "aus" ;;
+  *) sed -n '2,4p' "$0"; exit 1 ;;
+esac

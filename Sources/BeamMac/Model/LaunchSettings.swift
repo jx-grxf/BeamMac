@@ -53,12 +53,16 @@ enum Upscaler: String, CaseIterable, Identifiable {
     switch self {
     case .game: "Menüs und Schrift in voller Auflösung, nur die 3D-Welt wird hochgerechnet. Schärfstes Bild."
     case .metalFX: "Das ganze Bild wird hochgerechnet, auch die Schrift. Etwas weicher, aber am sparsamsten."
-    case .off: "Alles in voller Auflösung. Braucht viel GPU-Leistung."
+    case .off: "Kein Hochskalieren. BeamNG rendert in Punkten, macOS streckt das Bild auf das Display."
     }
   }
 
   /// The game sees the screen in pixels unless DXMT's MetalFX does the scaling.
   var rendersInPixels: Bool { self != .metalFX }
+
+  /// The BeamNG mode waits for Retina per game and a temporal upscaler under
+  /// DXMT; until then it rendered the world at a quarter of the pixels.
+  static var choices: [Upscaler] { [.metalFX, .off] }
 }
 
 extension NSScreen {
@@ -74,8 +78,17 @@ final class LaunchSettings {
   var metalHUD: Bool { didSet { save() } }
   var upscaler: Upscaler { didSet { save() } }
   var frameLimit: Int { didSet { save() } }
+  var lowLatency: Bool { didSet { save() } }
+  /// Off starts the game the way Wine alone would, so the pack can be measured.
+  var gamePack: Bool { didSet { save() } }
 
-  static let frameLimits = [0, 30, 60, 120]
+  // 40 fps is a third of a 120 Hz panel: every frame stays up for exactly three
+  // refreshes, where an uncapped 45-50 fps alternates two and three.
+  static let frameLimits = [0, 30, 40, 60, 120]
+
+  /// The highest limit that divides the panel's refresh rate and that a
+  /// CPU-bound BeamNG under Rosetta holds with traffic.
+  static var steadyFrameLimit: Int { GameSettings.refreshRate % 40 == 0 ? 40 : 30 }
 
   /// DXMT multiplies the game's resolution by this factor. The game renders at
   /// the screen size in points, so the backing scale lands on the panel's pixels.
@@ -94,20 +107,33 @@ final class LaunchSettings {
       upscaler = defaults.object(forKey: "metalFX") as? Bool == false ? .off : .metalFX
     }
     frameLimit = defaults.object(forKey: "frameLimit") as? Int ?? 60
+    lowLatency = defaults.object(forKey: "lowLatency") as? Bool ?? true
+    gamePack = defaults.object(forKey: "gamePack") as? Bool ?? true
+    if !Upscaler.choices.contains(upscaler) { upscaler = .metalFX }
   }
 
   var arguments: [String] {
     var args = [backend.flag]
     if metalHUD { args.append("--hud") }
-    args += ["--upscaler", upscaler.rawValue]
+    if gamePack {
+      args += ["--upscaler", upscaler.rawValue]
+    } else {
+      args.append("--stock")
+    }
     return args
   }
 
   func writeDXMTConfig(to url: URL) throws {
     var lines = ["# Von BeamMac geschrieben. Änderungen in der App vornehmen."]
-    if frameLimit > 0 { lines.append("d3d11.preferredMaxFrameRate = \(frameLimit)") }
-    lines.append("d3d11.metalSpatialUpscaleFactor = \(String(format: "%.2f", Self.upscale))")
     lines.append("dxgi.handleAltTab = True")
+    if gamePack {
+      if frameLimit > 0 { lines.append("d3d11.preferredMaxFrameRate = \(frameLimit)") }
+      lines.append("d3d11.metalSpatialUpscaleFactor = \(String(format: "%.2f", Self.upscale))")
+      // DXMT lets the CPU run up to three frames ahead. One would make the game
+      // thread wait for DXMT's encoder thread and the GPU every frame, which
+      // costs frames while BeamNG is CPU-bound; two keeps them overlapping.
+      if lowLatency { lines.append("dxgi.maxFrameLatency = 2") }
+    }
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
   }
@@ -117,5 +143,7 @@ final class LaunchSettings {
     defaults.set(metalHUD, forKey: "metalHUD")
     defaults.set(upscaler.rawValue, forKey: "upscaler")
     defaults.set(frameLimit, forKey: "frameLimit")
+    defaults.set(lowLatency, forKey: "lowLatency")
+    defaults.set(gamePack, forKey: "gamePack")
   }
 }

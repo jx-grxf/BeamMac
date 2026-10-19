@@ -14,6 +14,7 @@ final class AppModel {
   private(set) var steamRunning = false
   private(set) var gameRunning = false
   private(set) var launcherRunning = false
+  private(set) var beammpRunning = false
   /// Set while Steam prepares the game. Steam gives no signal for that phase,
   /// so the status falls back to "Steam läuft" after a few minutes.
   private(set) var launchStarted: Date?
@@ -88,6 +89,7 @@ final class AppModel {
     }
     launcherRunning = state.processes.launcher != nil
     gameRunning = state.processes.game
+    beammpRunning = state.processes.beammp
     transfer = state.transfer
     steamBootstrapping = state.bootstrapping
     // An update keeps the launch pending; Steam starts the game once it is done.
@@ -108,7 +110,12 @@ final class AppModel {
     }
   }
 
-  func drive() async {
+  /// Same as drive, with the BeamMP launcher started first.
+  func driveOnline() async {
+    await drive(multiplayer: true)
+  }
+
+  func drive(multiplayer: Bool = false) async {
     guard let home else { return }
     do {
       try settings.writeDXMTConfig(to: home.dxmtConfig)
@@ -123,7 +130,9 @@ final class AppModel {
       return
     }
     // The script restarts Steam and returns once it runs; the game follows later.
-    if await runner.run("BeamNG wird gestartet", script: home.script("beamng"), arguments: settings.arguments, home: home.root) {
+    let arguments = settings.arguments + (multiplayer ? ["--multiplayer"] : [])
+    let title = multiplayer ? "BeamNG mit BeamMP wird gestartet" : "BeamNG wird gestartet"
+    if await runner.run(title, script: home.script("beamng"), arguments: arguments, home: home.root) {
       launchStarted = .now
     }
     await refresh()
