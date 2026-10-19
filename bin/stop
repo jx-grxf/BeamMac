@@ -4,7 +4,7 @@ source "$(dirname "$0")/../lib/common.sh"
 
 # Wine starts its server as lib/wine/../../bin/wineserver, so match the
 # engines folder instead of the canonical binary path.
-if ! pgrep -qf "$ENGINES/wine.*wineserver"; then
+if ! pgrep -qf "$(regex_escape "$ENGINES")/.*wineserver"; then
   log "Nichts zu beenden"
   exit 0
 fi

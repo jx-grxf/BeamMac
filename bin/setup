@@ -5,15 +5,64 @@ source "$(dirname "$0")/../lib/common.sh"
 [[ "$(uname -m)" == arm64 ]] || die "Nur für Apple-Silicon-Macs gebaut."
 arch -x86_64 /usr/bin/true 2>/dev/null || die "Rosetta fehlt: softwareupdate --install-rosetta --agree-to-license"
 
-install_engine() {
-  local base; base="$(engine_dir dxmt)"
-  if [[ ! -x "$base/bin/wine" ]]; then
-    fetch "$WINE_URL" "$WINE_SHA" "$DOWNLOADS/wine/engine.tar.xz"
-    log "Entpacke Wine 10"
-    mkdir -p "$ENGINES/wine"
-    tar xJf "$DOWNLOADS/wine/engine.tar.xz" -C "$ENGINES/wine"
-  fi
+# Wine finds its libraries and its server relative to its own path
+# (lib/wine/../../bin), so Contents/MacOS is the engine's bin and
+# Contents/bin points there.
+make_engine_app() {
+  local src="$1" app="$2"
+  mkdir -p "$app/Contents"
+  mv "$src/bin" "$app/Contents/MacOS"
+  mv "$src/lib" "$app/Contents/lib"
+  mv "$src/share" "$app/Contents/share"
+  [[ -f "$src/version" ]] && mv "$src/version" "$app/Contents/version"
+  ln -s MacOS "$app/Contents/bin"
+  rm -rf "$src"
+}
 
+write_engine_plist() {
+  local app="$1" id="$2"
+  cat >"$app/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>at.johannesgrof.BeamMac.$id</string>
+  <key>CFBundleName</key><string>BeamNG.drive</string>
+  <key>CFBundleExecutable</key><string>wine</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>LSApplicationCategoryType</key><string>public.app-category.racing-games</string>
+  <key>LSSupportsGameMode</key><true/>
+  <key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>
+PLIST
+}
+
+STEPS=6
+
+install_engine() {
+  step 1 "$STEPS" "Wine-Engine laden"
+  local base; base="$(engine_dir dxmt)"
+  local app; app="$(dirname "$base")"
+  if [[ ! -x "$base/MacOS/wine" ]]; then
+    if [[ ! -x "$ENGINES/wine/wswine.bundle/bin/wine" ]]; then
+      fetch "$WINE_URL" "$WINE_SHA" "$DOWNLOADS/wine/engine.tar.xz"
+      log "Entpacke Wine 10"
+      mkdir -p "$ENGINES/wine"
+      tar xJf "$DOWNLOADS/wine/engine.tar.xz" -C "$ENGINES/wine"
+    fi
+    make_engine_app "$ENGINES/wine/wswine.bundle" "$app"
+    rmdir "$ENGINES/wine" 2>/dev/null || true
+  fi
+  write_engine_plist "$app" engine
+  # Installs from before the engines became app bundles kept the variants as plain folders.
+  for old in d3dmetal wined3d; do
+    if [[ -x "$ENGINES/wine-$old/bin/wine" && ! -e "$(engine_dir "$old")" ]]; then
+      make_engine_app "$ENGINES/wine-$old" "$(dirname "$(engine_dir "$old")")"
+    fi
+  done
+
+  step 2 "$STEPS" "DXMT, D3DMetal und Bibliotheken laden"
   local tpl="Template-$TEMPLATE_VERSION.app/Contents"
   if [[ ! -d "$ENGINES/frameworks" || ! -d "$ENGINES/dxmt" || ! -d "$ENGINES/d3dmetal" ]]; then
     fetch "$TEMPLATE_URL" "$TEMPLATE_SHA" "$DOWNLOADS/template/Template-$TEMPLATE_VERSION.tar.xz"
@@ -29,23 +78,40 @@ install_engine() {
     rm -rf "$tmp"
   fi
 
+  if [[ "$(cat "$ENGINES/dxmt/version" 2>/dev/null)" != "$DXMT_VERSION" ]]; then
+    fetch "$DXMT_URL" "$DXMT_SHA" "$DOWNLOADS/dxmt/$(basename "$DXMT_URL")"
+    log "Entpacke DXMT $DXMT_VERSION"
+    local dxmt_tmp="$DOWNLOADS/dxmt/x"
+    rm -rf "$dxmt_tmp" && mkdir -p "$dxmt_tmp"
+    tar xJf "$DOWNLOADS/dxmt/$(basename "$DXMT_URL")" -C "$dxmt_tmp"
+    rm -rf "$ENGINES/dxmt"
+    mv "$dxmt_tmp/dxmt" "$ENGINES/dxmt"
+    rm -rf "$dxmt_tmp"
+  fi
+
+  step 3 "$STEPS" "Engines einrichten"
   # winemetal's .so and .dll halves must come from the same DXMT build.
   local lib="$base/lib/wine"
   cp "$ENGINES/dxmt/wine/x86_64-unix/winemetal.so" "$lib/x86_64-unix/"
   cp "$ENGINES/dxmt/wine/x86_64-windows/winemetal.dll" "$lib/x86_64-windows/"
   cp "$ENGINES/dxmt/wine/i386-windows/winemetal.dll" "$lib/i386-windows/"
+  # DLSS and NVAPI through MetalFX, only active with DXMT_ENABLE_NVEXT=1.
+  for dll in nvngx nvapi64; do
+    [[ -f "$ENGINES/dxmt/wine/x86_64-windows/$dll.dll" ]] && cp "$ENGINES/dxmt/wine/x86_64-windows/$dll.dll" "$lib/x86_64-windows/"
+  done
 
   # D3DMetal replaces Wine's builtin d3d11/dxgi, so it lives in an APFS clone
   # of the engine. Both engines share one prefix and one Steam install.
   local d3dm; d3dm="$(engine_dir d3dmetal)"
-  if [[ ! -x "$d3dm/bin/wine" ]]; then
+  if [[ ! -x "$d3dm/MacOS/wine" ]]; then
     log "Baue D3DMetal-Variante der Engine"
-    cp -cR "$base" "$d3dm"
+    cp -cR "$app" "$(dirname "$d3dm")"
     mkdir -p "$d3dm/lib/external"
     cp -R "$ENGINES/d3dmetal/external/." "$d3dm/lib/external/"
     cp -R "$ENGINES/d3dmetal/wine/x86_64-windows/." "$d3dm/lib/wine/x86_64-windows/"
     cp -R "$ENGINES/d3dmetal/wine/x86_64-unix/." "$d3dm/lib/wine/x86_64-unix/"
   fi
+  write_engine_plist "$(dirname "$d3dm")" engine.d3dmetal
 
   # DXMT's DLLs carry the "Wine builtin DLL" marker, so Wine ignores copies in
   # system32 or next to the game and loads the engine's own wined3d versions.
@@ -58,6 +124,16 @@ install_engine() {
       cp "$ENGINES/dxmt/wine/$arch/$dll.dll" "$lib/$arch/"
     done
   done
+
+  local wd3d; wd3d="$(engine_dir wined3d)"
+  if [[ ! -x "$wd3d/MacOS/wine" ]]; then
+    log "Baue WineD3D-Variante der Engine"
+    cp -cR "$app" "$(dirname "$wd3d")"
+    for arch in x86_64-windows i386-windows; do
+      cp "$backup/$arch/"*.dll "$wd3d/lib/wine/$arch/"
+    done
+  fi
+  write_engine_plist "$(dirname "$wd3d")" engine.wined3d
 }
 
 # Has no effect on its own: Wine swaps these builtin-marked copies for the
@@ -87,6 +163,10 @@ install_dxmt_prefix() {
 # upscale factor, so the game has to see the screen in points (e.g. 1800 wide)
 # and MetalFX brings it to the panel's real pixels. With Retina mode on, BeamNG
 # rendered at full panel size and MetalFX upscaled that again to twice the panel.
+# Controllers go through SDL: Wine then offers them as XInput gamepads, which
+# BeamNG reads. For PlayStation pads Wine prefers the raw HID device instead,
+# which BeamNG leaves to its own Sony library, and that never sees input under
+# Wine. DisableHidraw turns that preference off.
 # Steam reruns the DirectX redistributable before every launch until this key
 # exists, and under Wine DXSETUP never reports success, so every start waits
 # for the installer.
@@ -107,6 +187,12 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\Software\Wow6432Node\Valve\Steam\Apps\CommonRedist\DirectX\Jun2010]
 "dxsetup"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\winebus]
+"IOHID"=-
+"DisableHidraw"=dword:00000001
+"Enable SDL"=dword:00000001
+"Map Controllers"=dword:00000001
 EOF
   run_wine dxmt regedit /S "$reg"
 }
@@ -122,13 +208,15 @@ install_steam() {
 install_engine
 
 mkdir -p "$DATA"
-log "Lege Wine-Prefix an: $PREFIX"
+step 4 "$STEPS" "Windows-Umgebung anlegen"
 # Skips the Mono and Gecko installer dialogs; Steam needs neither.
 WINEDLLOVERRIDES="mscoree,mshtml=" run_wine dxmt wineboot --init
 "$(wineserver_bin dxmt)" -w
 
+step 5 "$STEPS" "Einstellungen setzen"
 configure_prefix
 install_dxmt_prefix
+step 6 "$STEPS" "Steam installieren"
 install_steam
 
 log "Fertig. Weiter mit: bin/steam   (einloggen, BeamNG installieren)"

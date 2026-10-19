@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Usage: script/build_and_run.sh [run|build|install]
+# Usage: script/build_and_run.sh [run|build|install|release]
 #   install copies BeamMac.app to ~/Applications
+#   release builds a bundle that does not point at this checkout
 set -euo pipefail
 
 MODE="${1:-run}"
@@ -36,8 +37,16 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 cp "$BIN_PATH/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 cp "$ICON_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+mkdir -p "$APP_BUNDLE/Contents/Resources/BeamMac"
+cp -R bin lib config "$APP_BUNDLE/Contents/Resources/BeamMac/"
 
-# BeamMacRoot points the app at this checkout; it only drives bin/ and data/ here.
+# Development builds also know the checkout, so an install that lives there
+# keeps its data. Release builds keep everything in Application Support.
+dev_keys=""
+if [[ "$MODE" != release ]]; then
+  dev_keys="<key>BeamMacRoot</key><string>$ROOT_DIR</string>"
+fi
+
 cat >"$APP_BUNDLE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,7 +63,7 @@ cat >"$APP_BUNDLE/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>BeamMacRoot</key><string>$ROOT_DIR</string>
+  $dev_keys
 </dict>
 </plist>
 PLIST
@@ -69,7 +78,7 @@ case "$MODE" in
     cp -R "$APP_BUNDLE" "$HOME/Applications/"
     open "$HOME/Applications/$APP_NAME.app"
     ;;
-  build) ;;
+  build|release) ;;
   *) echo "unbekannter Modus: $MODE" >&2; exit 1 ;;
 esac
 echo "$APP_BUNDLE"
