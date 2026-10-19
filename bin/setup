@@ -46,10 +46,22 @@ install_engine() {
     cp -R "$ENGINES/d3dmetal/wine/x86_64-windows/." "$d3dm/lib/wine/x86_64-windows/"
     cp -R "$ENGINES/d3dmetal/wine/x86_64-unix/." "$d3dm/lib/wine/x86_64-unix/"
   fi
+
+  # DXMT's DLLs carry the "Wine builtin DLL" marker, so Wine ignores copies in
+  # system32 or next to the game and loads the engine's own wined3d versions.
+  # They have to replace the builtins in the engine itself.
+  local backup="$ENGINES/wine-builtin-backup"
+  for arch in x86_64-windows i386-windows; do
+    mkdir -p "$backup/$arch"
+    for dll in d3d11 dxgi d3d10core; do
+      [[ -f "$backup/$arch/$dll.dll" ]] || cp "$lib/$arch/$dll.dll" "$backup/$arch/"
+      cp "$ENGINES/dxmt/wine/$arch/$dll.dll" "$lib/$arch/"
+    done
+  done
 }
 
-# DXMT's d3d11/dxgi go into the prefix as native DLLs, and only the BeamNG
-# executables are told to load them. Steam's CEF UI stays on Wine's own d3d11.
+# Has no effect on its own: Wine swaps these builtin-marked copies for the
+# engine's DLLs (see install_engine). Kept so older prefixes stay consistent.
 install_dxmt_prefix() {
   local win="$PREFIX/drive_c/windows"
   for dll in d3d11 dxgi d3d10core; do
@@ -71,22 +83,24 @@ install_dxmt_prefix() {
   run_wine dxmt regedit /S "$reg"
 }
 
-# Retina mode gives games the panel's real pixels. 192 DPI keeps Windows UI
-# such as Steam at the size it would have on a normal 200 % display.
+# Retina mode stays off: DXMT's MetalFX multiplies the game's resolution by the
+# upscale factor, so the game has to see the screen in points (e.g. 1800 wide)
+# and MetalFX brings it to the panel's real pixels. With Retina mode on, BeamNG
+# rendered at full panel size and MetalFX upscaled that again to twice the panel.
 configure_prefix() {
   local reg="$DATA/mac-driver.reg"
   cat > "$reg" <<'EOF'
 Windows Registry Editor Version 5.00
 
 [HKEY_CURRENT_USER\Software\Wine\Mac Driver]
-"RetinaMode"="y"
+"RetinaMode"="n"
 "CaptureDisplaysForFullscreen"="y"
 
 [HKEY_CURRENT_USER\Control Panel\Desktop]
-"LogPixels"=dword:000000c0
+"LogPixels"=dword:00000060
 
 [HKEY_LOCAL_MACHINE\System\CurrentControlSet\Hardware Profiles\Current\Software\Fonts]
-"LogPixels"=dword:000000c0
+"LogPixels"=dword:00000060
 EOF
   run_wine dxmt regedit /S "$reg"
 }

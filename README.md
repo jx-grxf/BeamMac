@@ -12,10 +12,10 @@ Runs BeamNG.drive on Apple Silicon Macs through Wine, with DXMT or Apple's D3DMe
 
 - Installs a Wine 10 engine (Sikarugir build), the Windows Steam client and a dedicated prefix in this folder. Nothing goes to `/Applications` or `~/.wine`.
 - Ships two Metal backends for Direct3D 11 and switches between them per launch:
-  - **DXMT**: loaded only by the BeamNG executables through per-app DLL overrides. Steam keeps Wine's own d3d11, so its window stays usable.
+  - **DXMT**: replaces Wine's `d3d11`, `dxgi` and `d3d10core` inside the engine. DXMT's DLLs are marked as Wine builtins, so copies in `system32` or next to the game are swapped back for Wine's own. The originals stay in `engines/wine-builtin-backup`.
   - **D3DMetal** (Game Porting Toolkit): lives in an APFS clone of the engine, so both backends share one prefix and one Steam library.
 - Turns on MSync for lower CPU overhead on thread synchronisation.
-- Upscales with MetalFX through DXMT and paces frames through Metal (`config/dxmt.conf`).
+- Upscales with MetalFX through DXMT and paces frames through Metal (`config/dxmt.conf`). Wine's Retina mode stays off: the game renders at the screen size in points and MetalFX scales that to the panel's pixels.
 - Shows Apple's Metal HUD on request for FPS and frame times.
 - Keeps a DXMT shader cache in `data/shader-cache` so stutter from shader compilation happens once.
 
