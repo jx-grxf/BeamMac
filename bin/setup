@@ -71,6 +71,8 @@ install_dxmt_prefix() {
   run_wine dxmt regedit /S "$reg"
 }
 
+# Retina mode gives games the panel's real pixels. 192 DPI keeps Windows UI
+# such as Steam at the size it would have on a normal 200 % display.
 configure_prefix() {
   local reg="$DATA/mac-driver.reg"
   cat > "$reg" <<'EOF'
@@ -79,6 +81,12 @@ Windows Registry Editor Version 5.00
 [HKEY_CURRENT_USER\Software\Wine\Mac Driver]
 "RetinaMode"="y"
 "CaptureDisplaysForFullscreen"="y"
+
+[HKEY_CURRENT_USER\Control Panel\Desktop]
+"LogPixels"=dword:000000c0
+
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Hardware Profiles\Current\Software\Fonts]
+"LogPixels"=dword:000000c0
 EOF
   run_wine dxmt regedit /S "$reg"
 }

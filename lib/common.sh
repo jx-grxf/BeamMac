@@ -62,7 +62,10 @@ wine_env() {
   # The engine binaries have no rpath; Sikarugir's launcher resolves its
   # dylibs the same way. Calling wine through /usr/bin/arch would strip this.
   export DYLD_FALLBACK_LIBRARY_PATH="$ENGINES/frameworks:$ENGINES/frameworks/GStreamer.framework/Libraries:/usr/lib"
-  export DXMT_CONFIG_FILE="Z:${CONFIG//\//\\}\\dxmt.conf"
+  # The app writes its graphics settings to data/; the tracked file is the default.
+  local conf="$CONFIG/dxmt.conf"
+  [[ -f "$DATA/dxmt.conf" ]] && conf="$DATA/dxmt.conf"
+  export DXMT_CONFIG_FILE="Z:${conf//\//\\}"
   export DXMT_SHADER_CACHE_PATH="$DATA/shader-cache/"
   export DXMT_METALFX_SPATIAL_SWAPCHAIN="${BEAMNG_METALFX:-1}"
   export MTL_HUD_ENABLED="${BEAMNG_HUD:-0}"

@@ -1,6 +1,6 @@
 <div align="center">
 
-# Crumple
+# BeamMac
 
 Runs BeamNG.drive on Apple Silicon Macs through Wine, with DXMT or Apple's D3DMetal drawing through Metal.
 

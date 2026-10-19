@@ -2,11 +2,14 @@
 # Usage: bin/stop   beendet Steam, BeamNG und den wineserver
 source "$(dirname "$0")/../lib/common.sh"
 
-for backend in dxmt d3dmetal; do
-  if pgrep -qf "$(wineserver_bin "$backend")"; then
-    wine_env "$backend"
-    "$(wineserver_bin "$backend")" -k 2>/dev/null || true
-    "$(wineserver_bin "$backend")" -w 2>/dev/null || true
-    log "Gestoppt ($backend)"
-  fi
-done
+# Wine starts its server as lib/wine/../../bin/wineserver, so match the
+# engines folder instead of the canonical binary path.
+if ! pgrep -qf "$ENGINES/wine.*wineserver"; then
+  log "Nichts zu beenden"
+  exit 0
+fi
+
+wine_env dxmt
+"$(wineserver_bin dxmt)" -k 2>/dev/null || true
+"$(wineserver_bin dxmt)" -w 2>/dev/null || true
+log "Gestoppt"
