@@ -2,9 +2,24 @@
 # Usage: bin/stop   beendet Steam, BeamNG und den wineserver
 source "$(dirname "$0")/../lib/common.sh"
 
+# A Wine process whose server died keeps spinning on a full core, and neither
+# wineserver -k nor SIGTERM reaches it. Its working directory still points
+# into the prefix.
+kill_orphans() {
+  local pid cwd found=""
+  for pid in $(pgrep -f '^[A-Z]:\\' || true); do
+    cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' || true)"
+    [[ "$cwd" == "$PREFIX"* ]] || continue
+    kill -9 "$pid" 2>/dev/null && found=1
+  done
+  [[ -n "$found" ]] && log "Hängende Wine-Prozesse beendet"
+  return 0
+}
+
 # Wine starts its server as lib/wine/../../bin/wineserver, so match the
 # engines folder instead of the canonical binary path.
 if ! pgrep -qf "$(regex_escape "$ENGINES")/.*wineserver"; then
+  kill_orphans
   log "Nichts zu beenden"
   exit 0
 fi
@@ -12,4 +27,5 @@ fi
 wine_env dxmt
 "$(wineserver_bin dxmt)" -k 2>/dev/null || true
 "$(wineserver_bin dxmt)" -w 2>/dev/null || true
+kill_orphans
 log "Gestoppt"
