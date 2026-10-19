@@ -1,0 +1,4 @@
+# lib/common.sh sets variables for the scripts that source it.
+disable=SC2034
+external-sources=true
+source-path=SCRIPTDIR

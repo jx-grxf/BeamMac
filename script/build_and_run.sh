@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Usage: script/build_and_run.sh [run|build|install|release]
 #   install copies BeamMac.app to ~/Applications
-#   release builds a bundle that does not point at this checkout
+#   release builds a bundle that does not point at this checkout and packs it
+#   into dist/BeamMac-<version>.dmg
 set -euo pipefail
 
 MODE="${1:-run}"
 APP_NAME="BeamMac"
 BUNDLE_ID="at.johannesgrof.BeamMac"
-APP_VERSION="0.1.0"
+APP_VERSION="${BEAMMAC_VERSION:-0.1.0}"
 CONFIGURATION="${BEAMMAC_CONFIGURATION:-release}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,7 +18,7 @@ APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 ICON_DIR="$ROOT_DIR/Assets"
 
 cd "$ROOT_DIR"
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+[[ "$MODE" == run || "$MODE" == install ]] && { pkill -x "$APP_NAME" >/dev/null 2>&1 || true; }
 swift build -c "$CONFIGURATION"
 BIN_PATH="$(swift build -c "$CONFIGURATION" --show-bin-path)"
 
@@ -78,7 +79,18 @@ case "$MODE" in
     cp -R "$APP_BUNDLE" "$HOME/Applications/"
     open "$HOME/Applications/$APP_NAME.app"
     ;;
-  build|release) ;;
+  build) ;;
+  release)
+    dmg="$DIST_DIR/$APP_NAME-$APP_VERSION.dmg"
+    staging="$DIST_DIR/dmg"
+    rm -rf "$staging" "$dmg"
+    mkdir -p "$staging"
+    cp -R "$APP_BUNDLE" "$staging/"
+    ln -s /Applications "$staging/Applications"
+    hdiutil create -volname "$APP_NAME" -srcfolder "$staging" -fs HFS+ -format UDZO "$dmg" >/dev/null
+    rm -rf "$staging"
+    echo "$dmg"
+    ;;
   *) echo "unbekannter Modus: $MODE" >&2; exit 1 ;;
 esac
 echo "$APP_BUNDLE"

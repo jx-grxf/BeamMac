@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Lint scripts
+        run: |
+          command -v shellcheck >/dev/null || brew install shellcheck
+          shellcheck -S warning bin/* lib/common.sh script/build_and_run.sh
+      - name: Build app and DMG
+        run: script/build_and_run.sh release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BeamMac-dmg
+          path: dist/*.dmg
