@@ -36,7 +36,7 @@ struct ContentView: View {
         List(Page.allCases, selection: $page) { page in
           Label(page.title, systemImage: page.symbol).tag(page)
         }
-        .navigationSplitViewColumnWidth(200)
+        .navigationSplitViewColumnWidth(min: 200, ideal: 200, max: 200)
         .toolbar(removing: .sidebarToggle)
       } detail: {
         switch page ?? .drive {

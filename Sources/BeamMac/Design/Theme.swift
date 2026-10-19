@@ -10,6 +10,8 @@ enum Theme {
 
   static let cardRadius: CGFloat = 14
   static let rowRadius: CGFloat = 11
+  // Matches the corner of a large bordered macOS button next to it.
+  static let buttonRadius: CGFloat = 7
 
   // Crash-test marker yellow. Only for the brand mark and the one Drive button;
   // text on it is black because white on this yellow stays under 2:1.

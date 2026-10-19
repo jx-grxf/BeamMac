@@ -11,7 +11,7 @@ struct BeamMacApp: App {
         .frame(minWidth: 760, minHeight: 520)
         .task { model.startPolling() }
     }
-    .defaultSize(width: 880, height: 620)
+    .defaultSize(width: 900, height: 720)
     .windowToolbarStyle(.unified)
     .commands {
       CommandGroup(replacing: .newItem) {}

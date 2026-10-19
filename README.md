@@ -46,6 +46,21 @@ bin/wine winecfg           # any wine command inside the prefix
 
 Every launch restarts Steam, because the game inherits its environment from `steam.exe`.
 
+## App
+
+```sh
+script/build_and_run.sh           # build dist/BeamMac.app and open it
+script/build_and_run.sh install   # copy it to ~/Applications
+```
+
+BeamMac.app runs the same scripts from this checkout. It has three pages:
+
+- **Fahren**: start BeamNG or Steam, pick DXMT, D3DMetal or WineD3D, set the MetalFX factor, frame limit and Metal HUD. Shows the in-game resolution that matches the MetalFX factor and warns when Low Power Mode is on.
+- **Mods**: lists the ZIPs in BeamNG's mod folder, adds new ones by drag and drop, moves removed ones to the Trash.
+- **Wartung**: install status, setup, shader cache, winecfg, stop everything, live script output.
+
+The app writes its graphics settings to `data/dxmt.conf`; `config/dxmt.conf` stays the default for terminal launches.
+
 ## Layout
 
 | Path | Content | In git |

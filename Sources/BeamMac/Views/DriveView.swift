@@ -27,14 +27,16 @@ struct DriveView: View {
       }
 
       Section("Grafik-Backend") {
-        Picker("Backend", selection: $settings.backend) {
-          ForEach(Backend.allCases) { Text($0.title).tag($0) }
+        VStack(alignment: .leading, spacing: Theme.s2) {
+          Picker("Backend", selection: $settings.backend) {
+            ForEach(Backend.allCases) { Text($0.title).tag($0) }
+          }
+          .pickerStyle(.segmented)
+          .labelsHidden()
+          Text(settings.backend.caption)
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        Text(settings.backend.caption)
-          .font(.caption)
-          .foregroundStyle(.secondary)
       }
 
       Section {
@@ -139,9 +141,11 @@ private struct HeroRow: View {
           .buttonStyle(DriveButtonStyle())
           .disabled(busy)
       } else if !model.gameInstalled {
-        Button("In Steam installieren") { Task { await model.openSteam() } }
-          .buttonStyle(DriveButtonStyle())
-          .disabled(busy || model.steamRunning)
+        if !model.steamRunning {
+          Button("In Steam installieren") { Task { await model.openSteam() } }
+            .buttonStyle(DriveButtonStyle())
+            .disabled(busy)
+        }
       } else if !model.gameRunning {
         Button("Fahren") { Task { await model.drive() } }
           .buttonStyle(DriveButtonStyle())
@@ -182,11 +186,11 @@ private struct DriveButtonStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(.headline)
+      .font(.body.weight(.semibold))
       .foregroundStyle(Theme.crashBlack)
-      .padding(.horizontal, Theme.s5)
-      .padding(.vertical, Theme.s2)
-      .background(Theme.crashYellow, in: .rect(cornerRadius: Theme.rowRadius, style: .continuous))
+      .padding(.horizontal, Theme.s4)
+      .padding(.vertical, 5)
+      .background(Theme.crashYellow, in: .rect(cornerRadius: Theme.buttonRadius, style: .continuous))
       .opacity(isEnabled ? 1 : 0.45)
       .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
       .animation(Theme.hover, value: configuration.isPressed)
