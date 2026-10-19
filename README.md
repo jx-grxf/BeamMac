@@ -111,7 +111,7 @@ script/build_and_run.sh install    # copy it to ~/Applications
 script/build_and_run.sh release    # standalone bundle and dist/BeamMac-<version>.dmg
 ```
 
-SwiftUI, Swift Package Manager, no Xcode project. The app bundles `bin/`, `lib/` and `config/` in its resources. CI lints the scripts with ShellCheck and builds the DMG on every push; a `v*` tag publishes a release.
+SwiftUI, Swift Package Manager, no Xcode project. The app bundles `bin/`, `lib/` and `config/` in its resources. CI lints the scripts with ShellCheck and builds the DMG on every push; a `v*` tag publishes a release. With the secrets of the `release` environment set (`script/set_signing_secrets.sh`), release builds are signed with a Developer ID and notarized; without them they are ad-hoc signed.
 
 ## License
 

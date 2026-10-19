@@ -69,7 +69,13 @@ cat >"$APP_BUNDLE/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --sign - "$APP_BUNDLE" >/dev/null
+# BEAMMAC_SIGN_IDENTITY signs with a Developer ID and the hardened runtime that
+# notarization requires; without it the bundle is only ad-hoc signed.
+if [[ -n "${BEAMMAC_SIGN_IDENTITY:-}" ]]; then
+  codesign --force --options runtime --timestamp --sign "$BEAMMAC_SIGN_IDENTITY" "$APP_BUNDLE"
+else
+  codesign --force --sign - "$APP_BUNDLE" >/dev/null
+fi
 
 case "$MODE" in
   run) open "$APP_BUNDLE" ;;
@@ -89,6 +95,7 @@ case "$MODE" in
     ln -s /Applications "$staging/Applications"
     hdiutil create -volname "$APP_NAME" -srcfolder "$staging" -fs HFS+ -format UDZO "$dmg" >/dev/null
     rm -rf "$staging"
+    [[ -n "${BEAMMAC_SIGN_IDENTITY:-}" ]] && codesign --force --timestamp --sign "$BEAMMAC_SIGN_IDENTITY" "$dmg"
     echo "$dmg"
     ;;
   *) echo "unbekannter Modus: $MODE" >&2; exit 1 ;;
