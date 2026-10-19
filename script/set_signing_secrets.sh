@@ -23,7 +23,8 @@ key_file="$(find "$HOME/.appstoreconnect/private_keys" -name 'AuthKey_*.p8' 2>/d
 key_id="$(basename "$key_file" .p8)"
 key_id="${key_id#AuthKey_}"
 
-set_secret() { gh secret set "$1" --repo "$repo" --env "$env_name" --body "$2" >/dev/null; echo "gesetzt: $1"; }
+# Values go in on stdin; as arguments they would show up in ps for every user.
+set_secret() { printf '%s' "$2" | gh secret set "$1" --repo "$repo" --env "$env_name" >/dev/null; echo "gesetzt: $1"; }
 set_secret BEAMMAC_SIGN_IDENTITY "$identity"
 set_secret BEAMMAC_SIGN_P12_BASE64 "$(base64 -i "$p12")"
 set_secret BEAMMAC_SIGN_P12_PASSWORD "$password"
