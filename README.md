@@ -53,7 +53,7 @@ script/build_and_run.sh           # build dist/BeamMac.app and open it
 script/build_and_run.sh install   # copy it to ~/Applications
 ```
 
-BeamMac.app runs the same scripts from this checkout. It has three pages:
+BeamMac.app runs the same scripts from this checkout. It has four pages:
 
 - **Fahren**: start BeamNG or Steam, pick a profile (Flüssig, Ausgewogen, Schön), pick DXMT, D3DMetal or WineD3D, toggle the Metal HUD. Warns when Low Power Mode is on.
 - **Spiel**: MetalFX, frame limit, display mode, BeamNG's quality level, grass, effects, traffic and WASD steering. The resolution follows the screen in points and the MetalFX factor follows its backing scale.
