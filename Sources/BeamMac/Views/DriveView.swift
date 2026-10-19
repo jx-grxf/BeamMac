@@ -120,7 +120,7 @@ private struct HeroRow: View {
             .buttonStyle(DriveButtonStyle())
             .disabled(busy)
         }
-      } else if !model.gameRunning {
+      } else if !model.gameRunning && !model.launcherRunning && model.launchStarted == nil {
         Button("Fahren") { Task { await model.drive() } }
           .buttonStyle(DriveButtonStyle())
           .disabled(busy)
@@ -149,6 +149,9 @@ private struct StatusLabel: View {
         ? ("Steam läuft. BeamNG dort installieren.", "arrow.down.circle.fill", .secondary)
         : ("BeamNG ist noch nicht installiert", "arrow.down.circle", .secondary)
     }
+    if model.launcherRunning { return ("Im Launcher auf Launch klicken", "hand.tap.fill", .orange) }
+    if let title = model.runner.runningTitle { return (title, "hourglass", .secondary) }
+    if model.launchStarted != nil { return ("Steam bereitet BeamNG vor", "hourglass", .secondary) }
     if model.steamRunning { return ("Steam läuft", "circle.fill", .secondary) }
     return ("Bereit", "checkmark.circle.fill", .green)
   }

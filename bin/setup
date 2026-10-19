@@ -87,6 +87,9 @@ install_dxmt_prefix() {
 # upscale factor, so the game has to see the screen in points (e.g. 1800 wide)
 # and MetalFX brings it to the panel's real pixels. With Retina mode on, BeamNG
 # rendered at full panel size and MetalFX upscaled that again to twice the panel.
+# Steam reruns the DirectX redistributable before every launch until this key
+# exists, and under Wine DXSETUP never reports success, so every start waits
+# for the installer.
 configure_prefix() {
   local reg="$DATA/mac-driver.reg"
   cat > "$reg" <<'EOF'
@@ -101,6 +104,9 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\System\CurrentControlSet\Hardware Profiles\Current\Software\Fonts]
 "LogPixels"=dword:00000060
+
+[HKEY_LOCAL_MACHINE\Software\Wow6432Node\Valve\Steam\Apps\CommonRedist\DirectX\Jun2010]
+"dxsetup"=dword:00000001
 EOF
   run_wine dxmt regedit /S "$reg"
 }

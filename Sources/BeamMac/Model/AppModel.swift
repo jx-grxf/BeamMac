@@ -12,6 +12,10 @@ final class AppModel {
 
   private(set) var steamRunning = false
   private(set) var gameRunning = false
+  private(set) var launcherRunning = false
+  /// Set while Steam prepares the game. Steam gives no signal for that phase,
+  /// so the status falls back to "Steam läuft" after a few minutes.
+  private(set) var launchStarted: Date?
   private(set) var engineInstalled = false
   private(set) var steamInstalled = false
   private(set) var gameInstalled = false
@@ -38,7 +42,8 @@ final class AppModel {
     let state = await Task.detached {
       (
         steam: Self.isRunning("steam.exe"),
-        game: Self.isRunning("BeamNG.drive.x64.exe"),
+        game: Self.isRunning(#"BeamNG\.drive\.x64\.exe"#),
+        launcher: Self.pid(of: #"BeamNG\.drive\.exe"#),
         engine: home.engineInstalled,
         steamInstalled: home.steamInstalled,
         gameInstalled: home.gameInstalled,
@@ -46,7 +51,16 @@ final class AppModel {
       )
     }.value
     steamRunning = state.steam
+    if let pid = state.launcher, !launcherRunning {
+      // The launcher opens behind BeamMac; Wine windows have no bundle ID,
+      // so activate the process that owns it.
+      NSRunningApplication(processIdentifier: pid)?.activate()
+    }
+    launcherRunning = state.launcher != nil
     gameRunning = state.game
+    if gameRunning || !steamRunning || launchStarted.map({ -$0.timeIntervalSinceNow > 300 }) == true {
+      launchStarted = nil
+    }
     engineInstalled = state.engine
     steamInstalled = state.steamInstalled
     gameInstalled = state.gameInstalled
@@ -67,7 +81,10 @@ final class AppModel {
       runner.report("Spiel-Einstellungen konnten nicht gespeichert werden: \(error.localizedDescription)")
       return
     }
-    await runner.run("BeamNG wird gestartet", script: home.script("beamng"), arguments: settings.arguments)
+    // The script restarts Steam and returns once it runs; the game follows later.
+    if await runner.run("BeamNG wird gestartet", script: home.script("beamng"), arguments: settings.arguments) {
+      launchStarted = .now
+    }
     await refresh()
   }
 
@@ -123,15 +140,23 @@ final class AppModel {
   }
 
   nonisolated private static func isRunning(_ pattern: String) -> Bool {
+    pid(of: pattern) != nil
+  }
+
+  nonisolated private static func pid(of pattern: String) -> pid_t? {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-    process.arguments = ["-qif", pattern]
+    process.arguments = ["-if", pattern]
+    let pipe = Pipe()
+    process.standardOutput = pipe
     do {
       try process.run()
+      let data = pipe.fileHandleForReading.readDataToEndOfFile()
       process.waitUntilExit()
-      return process.terminationStatus == 0
+      guard process.terminationStatus == 0 else { return nil }
+      return String(decoding: data, as: UTF8.self).split(separator: "\n").first.flatMap { pid_t($0) }
     } catch {
-      return false
+      return nil
     }
   }
 }
