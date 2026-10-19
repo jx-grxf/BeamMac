@@ -84,6 +84,9 @@ final class GameSettings {
   var mirrors: Bool { didSet { changed() } }
   var reflections: Bool { didSet { changed() } }
   var grassDensity: Double { didSet { changed() } }
+  /// Share of the panel's pixels per axis the 3D world renders at when BeamNG
+  /// upscales. 0.5 matches what MetalFX gets from a points-sized frame.
+  var renderScale: Double { didSet { changed() } }
   var trafficOnLoad: Bool { didSet { changed() } }
   var trafficCars: Int { didSet { changed() } }
   var parkedCars: Int { didSet { changed() } }
@@ -91,6 +94,8 @@ final class GameSettings {
 
   static let trafficRange = 1...20
   static let parkedRange = 0...16
+  // The bounds of BeamNG's GraphicUpscalingQuality.
+  static let renderScaleRange = 0.33...1.0
 
   private var applying = false
   private let defaults = UserDefaults.standard
@@ -107,6 +112,7 @@ final class GameSettings {
     mirrors = d.object(forKey: "game.mirrors") as? Bool ?? true
     reflections = d.object(forKey: "game.reflections") as? Bool ?? false
     grassDensity = d.object(forKey: "game.grassDensity") as? Double ?? 0.5
+    renderScale = d.object(forKey: "game.renderScale") as? Double ?? 0.5
     trafficOnLoad = d.object(forKey: "game.trafficOnLoad") as? Bool ?? false
     trafficCars = d.object(forKey: "game.trafficCars") as? Int ?? 3
     parkedCars = d.object(forKey: "game.parkedCars") as? Int ?? 3
@@ -131,7 +137,9 @@ final class GameSettings {
       mirrors = false
       reflections = false
       grassDensity = 0.25
+      renderScale = 0.5
       trafficOnLoad = false
+      trafficCars = 2
       parkedCars = 0
     case .balanced:
       launch.frameLimit = 60
@@ -143,6 +151,7 @@ final class GameSettings {
       mirrors = true
       reflections = false
       grassDensity = 0.5
+      renderScale = 0.5
       trafficOnLoad = false
       trafficCars = 3
       parkedCars = 3
@@ -156,6 +165,8 @@ final class GameSettings {
       mirrors = true
       reflections = true
       grassDensity = 0.75
+      renderScale = 0.67
+      trafficOnLoad = true
       trafficCars = 5
       parkedCars = 6
     case .custom:
@@ -174,13 +185,15 @@ final class GameSettings {
   /// The resolution BeamNG has to use: the screen in points. Wine runs without
   /// Retina mode, and DXMT's MetalFX multiplies this by the backing scale.
   static var screenSize: (width: Int, height: Int) {
-    guard let screen = NSScreen.main else { return (1920, 1080) }
+    guard let screen = NSScreen.gameScreen else { return (1920, 1080) }
     let frame = screen.frame
     return (Int(frame.width.rounded()), Int(frame.height.rounded()))
   }
 
+  static var backingScale: Double { Double(NSScreen.gameScreen?.backingScaleFactor ?? 2) }
+
   static var refreshRate: Int {
-    max(60, NSScreen.main?.maximumFramesPerSecond ?? 60)
+    max(60, NSScreen.gameScreen?.maximumFramesPerSecond ?? 60)
   }
 
   func write(to userFolder: URL, gameDirectory: URL, launch: LaunchSettings) throws {
@@ -193,9 +206,25 @@ final class GameSettings {
     }
 
     let size = Self.screenSize
+    let pixels = launch.upscaler.rendersInPixels ? Self.backingScale : 1
     values["GraphicOverallQuality"] = "Custom"
     values["GraphicDisplayModes"] = displayMode.rawValue
-    values["GraphicDisplayResolutions"] = "\(size.width) \(size.height)"
+    values["GraphicDisplayResolutions"] = "\(Int(Double(size.width) * pixels)) \(Int(Double(size.height) * pixels))"
+    // BeamNG caps its HTML UI at 1080 lines by default and stretches it above
+    // that, which blurs every menu on a Retina panel.
+    values["uiUpscaling"] = 0
+    switch launch.upscaler {
+    case .game:
+      // DLSS goes through DXMT's NV extension to MetalFX's temporal scaler.
+      // Without it BeamNG picks the next temporal upscaler on its own.
+      values["GraphicAntialias"] = 4
+      values["GraphicAntialiasType"] = "dlss"
+      values["GraphicUpscalingQuality"] = renderScale
+    case .metalFX, .off:
+      values["GraphicAntialias"] = 4
+      values["GraphicAntialiasType"] = "fxaa"
+      values["GraphicUpscalingQuality"] = 1
+    }
     values["GraphicDisplayRefreshRates"] = Self.refreshRate
     values["PostFXSSAOGeneralEnabled"] = ambientOcclusion
     values["PostFXDOFGeneralEnabled"] = depthOfField
@@ -258,6 +287,7 @@ final class GameSettings {
     defaults.set(mirrors, forKey: "game.mirrors")
     defaults.set(reflections, forKey: "game.reflections")
     defaults.set(grassDensity, forKey: "game.grassDensity")
+    defaults.set(renderScale, forKey: "game.renderScale")
     defaults.set(trafficOnLoad, forKey: "game.trafficOnLoad")
     defaults.set(trafficCars, forKey: "game.trafficCars")
     defaults.set(parkedCars, forKey: "game.parkedCars")

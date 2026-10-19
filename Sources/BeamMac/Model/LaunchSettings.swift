@@ -26,6 +26,45 @@ enum Backend: String, CaseIterable, Identifiable {
   }
 
   var flag: String { "--\(rawValue)" }
+
+  /// WineD3D stays available from the terminal for debugging; in the app it
+  /// would only be a slower way to the same picture.
+  static var choices: [Backend] { [.dxmt, .d3dmetal] }
+}
+
+/// Who scales the image up to the panel's pixels. The values match the
+/// `--upscaler` modes of bin/beamng.
+enum Upscaler: String, CaseIterable, Identifiable {
+  case game
+  case metalFX = "metalfx"
+  case off
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .game: "BeamNG"
+    case .metalFX: "MetalFX"
+    case .off: "Aus"
+    }
+  }
+
+  var caption: String {
+    switch self {
+    case .game: "Menüs und Schrift in voller Auflösung, nur die 3D-Welt wird hochgerechnet. Schärfstes Bild."
+    case .metalFX: "Das ganze Bild wird hochgerechnet, auch die Schrift. Etwas weicher, aber am sparsamsten."
+    case .off: "Alles in voller Auflösung. Braucht viel GPU-Leistung."
+    }
+  }
+
+  /// The game sees the screen in pixels unless DXMT's MetalFX does the scaling.
+  var rendersInPixels: Bool { self != .metalFX }
+}
+
+extension NSScreen {
+  /// Wine's primary monitor is the display with the menu bar. NSScreen.main
+  /// follows BeamMac's own window instead, which may sit on another display.
+  static var gameScreen: NSScreen? { screens.first }
 }
 
 @MainActor
@@ -33,28 +72,34 @@ enum Backend: String, CaseIterable, Identifiable {
 final class LaunchSettings {
   var backend: Backend { didSet { save() } }
   var metalHUD: Bool { didSet { save() } }
-  var metalFX: Bool { didSet { save() } }
+  var upscaler: Upscaler { didSet { save() } }
   var frameLimit: Int { didSet { save() } }
 
   static let frameLimits = [0, 30, 60, 120]
 
   /// DXMT multiplies the game's resolution by this factor. The game renders at
   /// the screen size in points, so the backing scale lands on the panel's pixels.
-  static var upscale: Double { Double(NSScreen.main?.backingScaleFactor ?? 2) }
+  static var upscale: Double { Double(NSScreen.gameScreen?.backingScaleFactor ?? 2) }
 
   private let defaults = UserDefaults.standard
 
   init() {
-    backend = Backend(rawValue: defaults.string(forKey: "backend") ?? "") ?? .dxmt
+    let savedBackend = Backend(rawValue: defaults.string(forKey: "backend") ?? "") ?? .dxmt
+    backend = Backend.choices.contains(savedBackend) ? savedBackend : .dxmt
     metalHUD = defaults.bool(forKey: "metalHUD")
-    metalFX = defaults.object(forKey: "metalFX") as? Bool ?? true
+    if let saved = Upscaler(rawValue: defaults.string(forKey: "upscaler") ?? "") {
+      upscaler = saved
+    } else {
+      // Before the choice existed, MetalFX was a switch; off meant native.
+      upscaler = defaults.object(forKey: "metalFX") as? Bool == false ? .off : .metalFX
+    }
     frameLimit = defaults.object(forKey: "frameLimit") as? Int ?? 60
   }
 
   var arguments: [String] {
     var args = [backend.flag]
     if metalHUD { args.append("--hud") }
-    if !metalFX { args.append("--no-metalfx") }
+    args += ["--upscaler", upscaler.rawValue]
     return args
   }
 
@@ -70,7 +115,7 @@ final class LaunchSettings {
   private func save() {
     defaults.set(backend.rawValue, forKey: "backend")
     defaults.set(metalHUD, forKey: "metalHUD")
-    defaults.set(metalFX, forKey: "metalFX")
+    defaults.set(upscaler.rawValue, forKey: "upscaler")
     defaults.set(frameLimit, forKey: "frameLimit")
   }
 }

@@ -8,9 +8,9 @@ struct BeamMacApp: App {
     WindowGroup("BeamMac") {
       ContentView()
         .environment(model)
-        .frame(minWidth: 760, minHeight: 520)
         .task { model.startPolling() }
     }
+    .windowResizability(.contentMinSize)
     .defaultSize(width: 900, height: 720)
     .windowToolbarStyle(.unified)
     .commands {

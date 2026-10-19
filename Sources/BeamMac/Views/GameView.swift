@@ -10,12 +10,27 @@ struct GameView: View {
 
     Form {
       Section {
-        Toggle(isOn: $launch.metalFX) {
-          Text("MetalFX-Hochskalierung")
-          Text(metalFXCaption(size))
+        Picker(selection: $launch.upscaler) {
+          ForEach(Upscaler.allCases) { Text($0.title).tag($0) }
+        } label: {
+          Text("Hochskalierung")
+          Text(launch.upscaler.caption)
         }
-        .toggleStyle(.switch)
-        .disabled(launch.backend != .dxmt)
+
+        if launch.upscaler == .game {
+          LabeledContent {
+            HStack(spacing: Theme.s3) {
+              Slider(value: $game.renderScale, in: GameSettings.renderScaleRange)
+                .frame(maxWidth: 220)
+              Text("\(Int((game.renderScale * 100).rounded())) %")
+                .font(.body.monospacedDigit())
+                .frame(width: 52, alignment: .trailing)
+            }
+          } label: {
+            Text("Auflösung der 3D-Welt")
+            Text(worldCaption(size, scale: game.renderScale))
+          }
+        }
 
         Picker(selection: frameLimit) {
           ForEach(LaunchSettings.frameLimits, id: \.self) { limit in
@@ -30,13 +45,13 @@ struct GameView: View {
           ForEach(DisplayMode.allCases) { Text($0.title).tag($0) }
         } label: {
           Text("Anzeigemodus")
-          Text("Randlos füllt den Bildschirm in \(size.width) × \(size.height). Vollbild kann den Game Mode von macOS auslösen.")
+          Text("Randlos füllt den ganzen Bildschirm. Vollbild kann den Game Mode von macOS auslösen.")
         }
       } header: {
         Text("Bild")
       } footer: {
-        if launch.backend != .dxmt {
-          Text("MetalFX gibt es nur mit DXMT.")
+        if launch.backend != .dxmt && launch.upscaler != .off {
+          Text("Die Hochskalierung über Metal gibt es nur mit DXMT.")
             .font(.caption)
             .foregroundStyle(.secondary)
         }
@@ -102,6 +117,15 @@ struct GameView: View {
       }
 
       Section {
+        Picker(selection: $launch.backend) {
+          ForEach(Backend.choices) { Text($0.title).tag($0) }
+        } label: {
+          Text("Grafik-Backend")
+          Text(launch.backend.caption)
+        }
+      } header: {
+        Text("Erweitert")
+      } footer: {
         Text("BeamMac schreibt diese Werte bei jedem Start ins Spiel. Was du im Spielmenü an denselben Stellen änderst, gilt bis zum nächsten Start aus BeamMac.")
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -129,10 +153,10 @@ struct GameView: View {
     .toggleStyle(.switch)
   }
 
-  private func metalFXCaption(_ size: (width: Int, height: Int)) -> String {
-    let scale = LaunchSettings.upscale
-    let width = Int((Double(size.width) * scale).rounded())
-    let height = Int((Double(size.height) * scale).rounded())
-    return "BeamNG rendert in \(size.width) × \(size.height), MetalFX rechnet auf \(width) × \(height) hoch."
+  private func worldCaption(_ size: (width: Int, height: Int), scale: Double) -> String {
+    let pixels = GameSettings.backingScale * scale
+    let width = Int((Double(size.width) * pixels).rounded())
+    let height = Int((Double(size.height) * pixels).rounded())
+    return "Die Welt rendert in \(width) × \(height). Weniger heißt mehr fps."
   }
 }

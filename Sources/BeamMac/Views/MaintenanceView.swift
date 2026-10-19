@@ -11,6 +11,14 @@ struct MaintenanceView: View {
         InstallRow(title: "Wine-Engine mit DXMT und D3DMetal", installed: model.engineInstalled)
         InstallRow(title: "Steam (Windows)", installed: model.steamInstalled)
         InstallRow(title: "BeamNG.drive", installed: model.gameInstalled)
+        if model.onboardingSkipped && !(model.isSetUp && model.gameInstalled) {
+          LabeledContent {
+            Button("Einrichten …") { model.onboardingSkipped = false }
+          } label: {
+            Text("Einrichtung fortsetzen")
+            Text("Führt durch die fehlenden Schritte bis zum ersten Start.")
+          }
+        }
         LabeledContent {
           Button("Setup ausführen") { Task { await model.runSetup() } }
             .disabled(busy)
@@ -30,6 +38,7 @@ struct MaintenanceView: View {
               .foregroundStyle(.secondary)
             Button("Leeren") { Task { await model.clearShaderCache() } }
               .disabled(model.gameRunning || model.shaderCacheSize == 0)
+              .help(model.gameRunning ? "Erst BeamNG beenden" : "")
           }
         } label: {
           Text("Shader-Cache")
@@ -47,6 +56,19 @@ struct MaintenanceView: View {
       }
 
       Section("Werkzeuge") {
+        @Bindable var model = model
+        Toggle(isOn: $model.prestartSteam) {
+          Text("Steam beim Öffnen vorstarten")
+          Text("Steam braucht unter Wine rund eine Minute bis zur Anmeldung. So ist es fertig, bevor du auf Fahren klickst.")
+        }
+        .toggleStyle(.switch)
+        LabeledContent {
+          Button("Aktualisieren") { Task { await model.updateSteam() } }
+            .disabled(busy || model.transfer != nil)
+        } label: {
+          Text("Steam aktualisieren")
+          Text("Steam sucht nur einmal pro Woche selbst nach Updates, weil die Suche unter Wine jeden Start um eine Minute verzögert.")
+        }
         LabeledContent {
           Button("Öffnen") { Task { await model.openWineConfiguration() } }
             .disabled(busy)
@@ -81,10 +103,12 @@ struct MaintenanceView: View {
       }
 
       if let home = model.home {
-        Section("Projektordner") {
+        Section("Speicherort") {
           LabeledContent {
-            Button("Ändern …") { model.chooseHome() }
+            Button("Ändern …") { model.chooseDataRoot() }
+              .disabled(model.steamRunning)
           } label: {
+            Text("Wine, Steam und BeamNG")
             Text(home.root.path)
               .font(.caption.monospaced())
               .textSelection(.enabled)

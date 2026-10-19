@@ -1,25 +1,37 @@
 import Foundation
 
-/// The checkout that holds bin/, engines/ and data/. The app only drives the
-/// scripts there, so the terminal and the app always do the same thing.
+/// Where BeamMac keeps its scripts and its data. The app only drives the
+/// scripts, so the terminal and the app always do the same thing.
 struct BeamMacHome: Equatable {
+  /// bin/, lib/ and config/: inside the app bundle, or a checkout in development.
+  let scripts: URL
+  /// engines/, downloads/ and data/, handed to the scripts as BEAMMAC_HOME.
   let root: URL
 
+  static let defaultRoot = URL.applicationSupportDirectory.appending(path: "BeamMac", directoryHint: .isDirectory)
+
   static func resolve() -> BeamMacHome? {
-    let candidates = [
-      UserDefaults.standard.string(forKey: "beamMacRoot"),
-      Bundle.main.object(forInfoDictionaryKey: "BeamMacRoot") as? String,
-    ]
-    for case let path? in candidates {
-      let home = BeamMacHome(root: URL(fileURLWithPath: path, isDirectory: true))
-      if home.isValid { return home }
-    }
-    return nil
+    let defaults = UserDefaults.standard
+    let checkout = (Bundle.main.object(forInfoDictionaryKey: "BeamMacRoot") as? String)
+      .map { URL(fileURLWithPath: $0, isDirectory: true) }
+    let bundled = Bundle.main.resourceURL?.appending(path: "BeamMac", directoryHint: .isDirectory)
+    guard let scripts = [bundled, checkout].compactMap({ $0 }).first(where: Self.hasScripts) else { return nil }
+
+    // A checkout that already holds a prefix keeps its data where it is.
+    let legacy = [defaults.string(forKey: "beamMacRoot"), checkout?.path]
+      .compactMap { $0 }
+      .map { URL(fileURLWithPath: $0, isDirectory: true) }
+      .first { FileManager.default.fileExists(atPath: $0.appending(path: "data/prefix").path) }
+    let root = defaults.string(forKey: "dataRoot").map { URL(fileURLWithPath: $0, isDirectory: true) }
+      ?? legacy ?? defaultRoot
+    return BeamMacHome(scripts: scripts, root: root)
   }
 
-  var isValid: Bool { FileManager.default.fileExists(atPath: script("beamng").path) }
+  private static func hasScripts(_ url: URL) -> Bool {
+    FileManager.default.fileExists(atPath: url.appending(path: "bin/beamng").path)
+  }
 
-  func script(_ name: String) -> URL { root.appending(path: "bin/\(name)") }
+  func script(_ name: String) -> URL { scripts.appending(path: "bin/\(name)") }
 
   var data: URL { root.appending(path: "data") }
   var prefix: URL { data.appending(path: "prefix") }
@@ -28,8 +40,26 @@ struct BeamMacHome: Equatable {
   var dxmtConfig: URL { data.appending(path: "dxmt.conf") }
   var steamDirectory: URL { prefix.appending(path: "drive_c/Program Files (x86)/Steam") }
   var gameDirectory: URL { steamDirectory.appending(path: "steamapps/common/BeamNG.drive") }
+  var appManifest: URL { steamDirectory.appending(path: "steamapps/appmanifest_284160.acf") }
+  var bootstrapLog: URL { steamDirectory.appending(path: "logs/bootstrap_log.txt") }
 
-  var engineInstalled: Bool { exists("engines/wine/wswine.bundle/bin/wine") }
+  /// Steam writes an account here after the first successful login.
+  var steamLoggedIn: Bool {
+    let url = steamDirectory.appending(path: "config/loginusers.vdf")
+    return (try? String(contentsOf: url, encoding: .utf8))?.contains("\"AccountName\"") == true
+  }
+
+  /// Free space on the disk that holds (or will hold) the library.
+  var freeSpace: Int64? {
+    var url = root
+    while !FileManager.default.fileExists(atPath: url.path), url.pathComponents.count > 1 {
+      url = url.deletingLastPathComponent()
+    }
+    let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+    return values?.volumeAvailableCapacityForImportantUsage
+  }
+
+  var engineInstalled: Bool { exists("engines/BeamNG.app/Contents/MacOS/wine") }
   var steamInstalled: Bool { FileManager.default.fileExists(atPath: steamDirectory.appending(path: "steam.exe").path) }
   var gameInstalled: Bool {
     FileManager.default.fileExists(atPath: gameDirectory.appending(path: "Bin64/BeamNG.drive.x64.exe").path)

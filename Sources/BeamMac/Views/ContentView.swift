@@ -4,6 +4,7 @@ enum Page: String, CaseIterable, Identifiable {
   case drive
   case game
   case mods
+  case controllers
   case maintenance
 
   var id: String { rawValue }
@@ -13,6 +14,7 @@ enum Page: String, CaseIterable, Identifiable {
     case .drive: "Fahren"
     case .game: "Spiel"
     case .mods: "Mods"
+    case .controllers: "Controller"
     case .maintenance: "Wartung"
     }
   }
@@ -22,6 +24,7 @@ enum Page: String, CaseIterable, Identifiable {
     case .drive: "car.fill"
     case .game: "slider.horizontal.3"
     case .mods: "shippingbox.fill"
+    case .controllers: "gamecontroller.fill"
     case .maintenance: "wrench.and.screwdriver.fill"
     }
   }
@@ -29,30 +32,43 @@ enum Page: String, CaseIterable, Identifiable {
 
 struct ContentView: View {
   @Environment(AppModel.self) private var model
-  @State private var page: Page? = .drive
+  @AppStorage("page") private var page: Page = .drive
 
   var body: some View {
     if model.home == nil {
       MissingHomeView()
+        .frame(width: 520, height: 360)
+    } else if model.showOnboarding {
+      OnboardingView()
     } else {
       NavigationSplitView {
-        List(Page.allCases, selection: $page) { page in
+        List(Page.allCases, selection: selection) { page in
           Label(page.title, systemImage: page.symbol).tag(page)
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 200, max: 200)
         .toolbar(removing: .sidebarToggle)
       } detail: {
-        switch page ?? .drive {
+        switch page {
         case .drive: DriveView()
         case .game: GameView()
         case .mods: ModsView()
+        case .controllers: ControllersView()
         case .maintenance: MaintenanceView()
         }
       }
       .toolbar {
         ToolbarItem(placement: .status) { BusyIndicator() }
       }
+      .frame(minWidth: 760, minHeight: 520)
+      .background(WindowSizer(compact: false))
     }
+  }
+}
+
+extension ContentView {
+  /// List selection is optional; an empty click keeps the current page.
+  private var selection: Binding<Page?> {
+    Binding(get: { page }, set: { if let new = $0 { page = new } })
   }
 }
 
@@ -79,12 +95,9 @@ private struct MissingHomeView: View {
 
   var body: some View {
     ContentUnavailableView {
-      Label("Projektordner fehlt", systemImage: "folder.badge.questionmark")
+      Label("BeamMac ist unvollständig", systemImage: "exclamationmark.triangle")
     } description: {
-      Text("BeamMac braucht den Ordner mit bin/, engines/ und data/. Wähle den BeamMac-Checkout aus.")
-    } actions: {
-      Button("Ordner auswählen …") { model.chooseHome() }
-        .buttonStyle(.borderedProminent)
+      Text("Im App-Paket fehlen die Skripte. BeamMac neu laden und in den Programme-Ordner ziehen.")
     }
   }
 }
