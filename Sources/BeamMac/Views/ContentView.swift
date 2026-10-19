@@ -2,6 +2,7 @@ import SwiftUI
 
 enum Page: String, CaseIterable, Identifiable {
   case drive
+  case game
   case mods
   case maintenance
 
@@ -10,6 +11,7 @@ enum Page: String, CaseIterable, Identifiable {
   var title: String {
     switch self {
     case .drive: "Fahren"
+    case .game: "Spiel"
     case .mods: "Mods"
     case .maintenance: "Wartung"
     }
@@ -18,6 +20,7 @@ enum Page: String, CaseIterable, Identifiable {
   var symbol: String {
     switch self {
     case .drive: "car.fill"
+    case .game: "slider.horizontal.3"
     case .mods: "shippingbox.fill"
     case .maintenance: "wrench.and.screwdriver.fill"
     }
@@ -41,6 +44,7 @@ struct ContentView: View {
       } detail: {
         switch page ?? .drive {
         case .drive: DriveView()
+        case .game: GameView()
         case .mods: ModsView()
         case .maintenance: MaintenanceView()
         }

@@ -6,6 +6,7 @@ import Observation
 final class AppModel {
   private(set) var home: BeamMacHome? = BeamMacHome.resolve()
   let settings = LaunchSettings()
+  let game = GameSettings()
   let runner = ScriptRunner()
   let mods = ModLibrary()
 
@@ -58,6 +59,12 @@ final class AppModel {
       try settings.writeDXMTConfig(to: home.dxmtConfig)
     } catch {
       runner.report("DXMT-Einstellungen konnten nicht gespeichert werden: \(error.localizedDescription)")
+      return
+    }
+    do {
+      try game.write(to: home.userFolder(), gameDirectory: home.gameDirectory, launch: settings)
+    } catch {
+      runner.report("Spiel-Einstellungen konnten nicht gespeichert werden: \(error.localizedDescription)")
       return
     }
     await runner.run("BeamNG wird gestartet", script: home.script("beamng"), arguments: settings.arguments)

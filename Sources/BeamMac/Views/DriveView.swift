@@ -26,6 +26,21 @@ struct DriveView: View {
         }
       }
 
+      Section {
+        VStack(alignment: .leading, spacing: Theme.s2) {
+          Picker("Profil", selection: profile) {
+            ForEach(Profile.allCases) { Text($0.title).tag($0) }
+          }
+          .pickerStyle(.segmented)
+          .labelsHidden()
+          Text(model.game.profile.caption)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      } header: {
+        Text("Profil")
+      }
+
       Section("Grafik-Backend") {
         VStack(alignment: .leading, spacing: Theme.s2) {
           Picker("Backend", selection: $settings.backend) {
@@ -39,47 +54,6 @@ struct DriveView: View {
         }
       }
 
-      Section {
-        Toggle(isOn: $settings.metalFX) {
-          Text("MetalFX-Hochskalierung")
-          Text("BeamNG rendert kleiner, MetalFX rechnet das Bild auf die volle Bildschirmauflösung hoch.")
-        }
-        .toggleStyle(.switch)
-
-        if settings.metalFX {
-          LabeledContent {
-            HStack(spacing: Theme.s3) {
-              Slider(value: $settings.upscale, in: 1.0...2.0, step: 0.25)
-                .frame(maxWidth: 220)
-              Text(String(format: "%.2f×", settings.upscale))
-                .font(.body.monospacedDigit())
-                .frame(width: 52, alignment: .trailing)
-            }
-          } label: {
-            Text("Faktor")
-            Text(renderHint(upscale: settings.upscale))
-          }
-        }
-
-        Picker(selection: $settings.frameLimit) {
-          ForEach(LaunchSettings.frameLimits, id: \.self) { limit in
-            Text(limit == 0 ? "Aus" : "\(limit) fps").tag(limit)
-          }
-        } label: {
-          Text("Bildraten-Limit")
-          Text("Metal taktet die Bilder gleichmäßig. 60 fps sind auf dem M5 Pro der sichere Wert.")
-        }
-      } header: {
-        Text("Bild")
-      } footer: {
-        if settings.backend != .dxmt {
-          Text("MetalFX und das Limit wirken nur mit DXMT.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-      }
-      .disabled(settings.backend != .dxmt)
-
       Section("Anzeige") {
         Toggle(isOn: $settings.metalHUD) {
           Text("Metal-HUD")
@@ -89,7 +63,7 @@ struct DriveView: View {
       }
 
       Section {
-        Text("Änderungen gelten beim nächsten Start. BeamMac startet Steam dafür neu.")
+        Text("Änderungen gelten beim nächsten Start. BeamMac schreibt sie dann ins Spiel und startet Steam neu.")
           .font(.caption)
           .foregroundStyle(.secondary)
       }
@@ -98,13 +72,13 @@ struct DriveView: View {
     .navigationTitle("Fahren")
   }
 
-  private func renderHint(upscale: Double) -> String {
-    guard let screen = NSScreen.main else { return "" }
-    let scale = screen.backingScaleFactor
-    let width = Int((screen.frame.width * scale / upscale).rounded())
-    let height = Int((screen.frame.height * scale / upscale).rounded())
-    return "In BeamNG \(width) × \(height) einstellen."
+  private var profile: Binding<Profile> {
+    Binding(
+      get: { model.game.profile },
+      set: { model.game.apply($0, launch: model.settings) }
+    )
   }
+
 }
 
 private struct HeroRow: View {

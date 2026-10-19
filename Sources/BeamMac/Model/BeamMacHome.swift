@@ -59,6 +59,13 @@ struct BeamMacHome: Equatable {
     return found.max { $0.1 < $1.1 }?.0
   }
 
+  /// BeamNG's user folder (settings, mods, vehicles). Falls back to the default
+  /// location before the first start, when there is no mods folder to find yet.
+  func userFolder() -> URL {
+    if let mods = modsDirectory() { return mods.deletingLastPathComponent() }
+    return prefix.appending(path: "drive_c/users/\(NSUserName())/AppData/Local/BeamNG/BeamNG.drive/current")
+  }
+
   private func exists(_ relative: String) -> Bool {
     FileManager.default.fileExists(atPath: root.appending(path: relative).path)
   }

@@ -55,11 +55,12 @@ script/build_and_run.sh install   # copy it to ~/Applications
 
 BeamMac.app runs the same scripts from this checkout. It has three pages:
 
-- **Fahren**: start BeamNG or Steam, pick DXMT, D3DMetal or WineD3D, set the MetalFX factor, frame limit and Metal HUD. Shows the in-game resolution that matches the MetalFX factor and warns when Low Power Mode is on.
+- **Fahren**: start BeamNG or Steam, pick a profile (Flüssig, Ausgewogen, Schön), pick DXMT, D3DMetal or WineD3D, toggle the Metal HUD. Warns when Low Power Mode is on.
+- **Spiel**: MetalFX, frame limit, display mode, BeamNG's quality level, grass, effects, traffic and WASD steering. The resolution follows the screen in points and the MetalFX factor follows its backing scale.
 - **Mods**: lists the ZIPs in BeamNG's mod folder, adds new ones by drag and drop, moves removed ones to the Trash.
 - **Wartung**: install status, setup, shader cache, winecfg, stop everything, live script output.
 
-The app writes its graphics settings to `data/dxmt.conf`; `config/dxmt.conf` stays the default for terminal launches.
+Before each launch the app writes `data/dxmt.conf` and the managed keys of BeamNG's `settings/settings.json` and `settings/inputmaps/keyboard.diff`, because the game rewrites its settings when it quits. `config/dxmt.conf` stays the default for terminal launches.
 
 ## Layout
 
