@@ -21,6 +21,8 @@ install_launcher() {
     die "BeamMP-Launcher konnte nicht geladen werden"
   fi
   tag="$(plutil -extract tag_name raw -o - "$release")"
+  # The tag goes into a download URL and a file name.
+  [[ "$tag" =~ ^v?[0-9]+(\.[0-9]+)*$ ]] || die "Unerwartete BeamMP-Version: $tag"
   if [[ -f "$BEAMMP_EXE" && "$(cat "$BEAMMP_DIR/beammac-version" 2>/dev/null)" == "$tag" ]]; then
     touch "$stamp"
     return 0
