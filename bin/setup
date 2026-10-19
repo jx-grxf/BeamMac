@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Usage: bin/setup   lädt Engine, DXMT, D3DMetal und Steam, legt den Prefix an
+source "$(dirname "$0")/../lib/common.sh"
+
+[[ "$(uname -m)" == arm64 ]] || die "Nur für Apple-Silicon-Macs gebaut."
+arch -x86_64 /usr/bin/true 2>/dev/null || die "Rosetta fehlt: softwareupdate --install-rosetta --agree-to-license"
+
+install_engine() {
+  local base; base="$(engine_dir dxmt)"
+  if [[ ! -x "$base/bin/wine" ]]; then
+    fetch "$WINE_URL" "$WINE_SHA" "$DOWNLOADS/wine/engine.tar.xz"
+    log "Entpacke Wine 10"
+    mkdir -p "$ENGINES/wine"
+    tar xJf "$DOWNLOADS/wine/engine.tar.xz" -C "$ENGINES/wine"
+  fi
+
+  local tpl="Template-$TEMPLATE_VERSION.app/Contents"
+  if [[ ! -d "$ENGINES/frameworks" || ! -d "$ENGINES/dxmt" || ! -d "$ENGINES/d3dmetal" ]]; then
+    fetch "$TEMPLATE_URL" "$TEMPLATE_SHA" "$DOWNLOADS/template/Template-$TEMPLATE_VERSION.tar.xz"
+    log "Entpacke Bibliotheken, DXMT und D3DMetal"
+    local tmp="$DOWNLOADS/template/x"
+    rm -rf "$tmp" && mkdir -p "$tmp"
+    tar xJf "$DOWNLOADS/template/Template-$TEMPLATE_VERSION.tar.xz" -C "$tmp" \
+      "$tpl/Frameworks" "$tpl/SharedSupport/renderer/dxmt" "$tpl/SharedSupport/renderer/d3dmetal"
+    rm -rf "$ENGINES/frameworks" "$ENGINES/dxmt" "$ENGINES/d3dmetal"
+    mv "$tmp/$tpl/Frameworks" "$ENGINES/frameworks"
+    mv "$tmp/$tpl/SharedSupport/renderer/dxmt" "$ENGINES/dxmt"
+    mv "$tmp/$tpl/SharedSupport/renderer/d3dmetal" "$ENGINES/d3dmetal"
+    rm -rf "$tmp"
+  fi
+
+  # winemetal's .so and .dll halves must come from the same DXMT build.
+  local lib="$base/lib/wine"
+  cp "$ENGINES/dxmt/wine/x86_64-unix/winemetal.so" "$lib/x86_64-unix/"
+  cp "$ENGINES/dxmt/wine/x86_64-windows/winemetal.dll" "$lib/x86_64-windows/"
+  cp "$ENGINES/dxmt/wine/i386-windows/winemetal.dll" "$lib/i386-windows/"
+
+  # D3DMetal replaces Wine's builtin d3d11/dxgi, so it lives in an APFS clone
+  # of the engine. Both engines share one prefix and one Steam install.
+  local d3dm; d3dm="$(engine_dir d3dmetal)"
+  if [[ ! -x "$d3dm/bin/wine" ]]; then
+    log "Baue D3DMetal-Variante der Engine"
+    cp -cR "$base" "$d3dm"
+    mkdir -p "$d3dm/lib/external"
+    cp -R "$ENGINES/d3dmetal/external/." "$d3dm/lib/external/"
+    cp -R "$ENGINES/d3dmetal/wine/x86_64-windows/." "$d3dm/lib/wine/x86_64-windows/"
+    cp -R "$ENGINES/d3dmetal/wine/x86_64-unix/." "$d3dm/lib/wine/x86_64-unix/"
+  fi
+}
+
+# DXMT's d3d11/dxgi go into the prefix as native DLLs, and only the BeamNG
+# executables are told to load them. Steam's CEF UI stays on Wine's own d3d11.
+install_dxmt_prefix() {
+  local win="$PREFIX/drive_c/windows"
+  for dll in d3d11 dxgi d3d10core; do
+    cp "$ENGINES/dxmt/wine/x86_64-windows/$dll.dll" "$win/system32/$dll.dll"
+    cp "$ENGINES/dxmt/wine/i386-windows/$dll.dll" "$win/syswow64/$dll.dll"
+  done
+
+  local reg="$DATA/dxmt-overrides.reg"
+  {
+    echo 'Windows Registry Editor Version 5.00'
+    for exe in BeamNG.drive.exe BeamNG.drive.x64.exe BeamNG.tech.x64.exe; do
+      echo
+      printf '[HKEY_CURRENT_USER\\Software\\Wine\\AppDefaults\\%s\\DllOverrides]\n' "$exe"
+      echo '"d3d11"="native,builtin"'
+      echo '"dxgi"="native,builtin"'
+      echo '"d3d10core"="native,builtin"'
+    done
+  } > "$reg"
+  run_wine dxmt regedit /S "$reg"
+}
+
+configure_prefix() {
+  local reg="$DATA/mac-driver.reg"
+  cat > "$reg" <<'EOF'
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Wine\Mac Driver]
+"RetinaMode"="y"
+"CaptureDisplaysForFullscreen"="y"
+EOF
+  run_wine dxmt regedit /S "$reg"
+}
+
+install_steam() {
+  [[ -f "$(steam_exe)" ]] && { log "Steam ist schon installiert"; return 0; }
+  fetch "$STEAM_SETUP_URL" "" "$DOWNLOADS/steam/SteamSetup.exe"
+  log "Installiere Steam (Windows-Version)"
+  run_wine dxmt "$DOWNLOADS/steam/SteamSetup.exe" /S
+  "$(wineserver_bin dxmt)" -w
+}
+
+install_engine
+
+mkdir -p "$DATA"
+log "Lege Wine-Prefix an: $PREFIX"
+# Skips the Mono and Gecko installer dialogs; Steam needs neither.
+WINEDLLOVERRIDES="mscoree,mshtml=" run_wine dxmt wineboot --init
+"$(wineserver_bin dxmt)" -w
+
+configure_prefix
+install_dxmt_prefix
+install_steam
+
+log "Fertig. Weiter mit: bin/steam   (einloggen, BeamNG installieren)"

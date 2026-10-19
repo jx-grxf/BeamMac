@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Usage: bin/wine <Programm> [Argumente]   z. B. bin/wine winecfg
+# Backend wählen mit BEAMNG_BACKEND=d3dmetal bin/wine ...
+source "$(dirname "$0")/../lib/common.sh"
+
+run_wine "$BACKEND" "$@"

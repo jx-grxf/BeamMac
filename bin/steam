@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Usage: bin/steam   startet nur Steam (zum Einloggen, Installieren, Updaten)
+exec "$(dirname "$0")/beamng" --steam-only "$@"

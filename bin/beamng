@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Usage: bin/beamng [--d3dmetal|--wined3d] [--hud] [--no-metalfx] [--steam-only]
+source "$(dirname "$0")/../lib/common.sh"
+
+steam_args=(-silent -applaunch "$BEAMNG_APPID")
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --d3dmetal) BACKEND=d3dmetal ;;
+    --wined3d) BACKEND=wined3d ;;
+    --dxmt) BACKEND=dxmt ;;
+    --hud) export BEAMNG_HUD=1 ;;
+    --no-metalfx) export BEAMNG_METALFX=0 ;;
+    --steam-only) steam_args=() ;;
+    -h|--help) sed -n '2p' "$0"; exit 0 ;;
+    *) die "unbekannte Option: $1" ;;
+  esac
+  shift
+done
+
+[[ -f "$(steam_exe)" ]] || die "Steam fehlt. Erst bin/setup ausführen."
+
+# The game inherits its environment from steam.exe, not from this script.
+# A Steam that is already running would ignore --hud and friends, so restart it.
+"$(dirname "$0")/stop" >/dev/null
+
+mkdir -p "$DATA/logs"
+log "Starte Steam (Backend: $BACKEND, HUD: ${BEAMNG_HUD:-0}, MetalFX: ${BEAMNG_METALFX:-1})"
+run_wine "$BACKEND" "$(steam_exe)" ${steam_args[@]+"${steam_args[@]}"} >"$DATA/logs/steam.log" 2>&1 &
+disown
+log "Log: $DATA/logs/steam.log"
