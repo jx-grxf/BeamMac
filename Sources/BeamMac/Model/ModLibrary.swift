@@ -25,7 +25,7 @@ final class ModLibrary {
         at: folder, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])) ?? []
       let mods = files
         .filter { $0.pathExtension.lowercased() == "zip" }
-        .map { url in
+        .map { (url: URL) -> Mod in
           let values = try? url.resourceValues(forKeys: Set(keys))
           return Mod(url: url, size: Int64(values?.fileSize ?? 0), modified: values?.contentModificationDate ?? .distantPast)
         }
