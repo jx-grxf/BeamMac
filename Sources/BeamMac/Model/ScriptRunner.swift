@@ -21,6 +21,10 @@ final class ScriptRunner {
   private(set) var runningTitle: String?
   private(set) var lastFailure: String?
   private(set) var progress: ScriptProgress?
+  /// The script's latest "==>" line, e.g. "Warte, bis Steam angemeldet ist".
+  private(set) var status: String?
+  /// The text of the script's last "Fehler:" line, from die in lib/common.sh.
+  private var scriptError: String?
   /// Output after the last newline; pipes hand over arbitrary chunks.
   private var partialLine = ""
 
@@ -28,6 +32,8 @@ final class ScriptRunner {
 
   private static let ansi = try! Regex(#"\u{1B}\[[0-9;]*m"#)
   private static let stepLine = try! Regex(#"\[(\d+)/(\d+)\] (.+)$"#)
+  private static let logLine = try! Regex(#"^==> (.+)$"#)
+  private static let errorLine = try! Regex(#"^Fehler: (.+)$"#)
   private static let curlBar = try! Regex(#"^[#\s]*(\d{1,3}[.,]\d)%\s*$"#)
   private static let maxLines = 1500
 
@@ -36,6 +42,8 @@ final class ScriptRunner {
     runningTitle = title
     lastFailure = nil
     progress = nil
+    status = nil
+    scriptError = nil
     appendLines("$ \(script.lastPathComponent) \(arguments.joined(separator: " "))")
 
     let process = Process()
@@ -70,8 +78,9 @@ final class ScriptRunner {
 
     runningTitle = nil
     progress = nil
+    self.status = nil
     if status != 0 {
-      lastFailure = "\(title) ist mit Code \(status) abgebrochen."
+      lastFailure = scriptError ?? "\(title) ist mit Code \(status) abgebrochen."
       appendLines("Abbruch mit Code \(status)")
     }
     return status == 0
@@ -134,6 +143,14 @@ final class ScriptRunner {
         let total = Int(String(match.output[2].substring ?? ""))
       {
         progress = ScriptProgress(step: step, total: total, title: String(match.output[3].substring ?? ""))
+      } else if let match = visible.firstMatch(of: Self.logLine) {
+        let text = String(match.output[1].substring ?? "")
+        // Skip the log file paths; details in parentheses are for the terminal.
+        if !text.hasPrefix("Log:") {
+          status = text.components(separatedBy: " (").first
+        }
+      } else if let match = visible.firstMatch(of: Self.errorLine) {
+        scriptError = String(match.output[1].substring ?? "")
       }
       if !visible.trimmingCharacters(in: .whitespaces).isEmpty { lines.append(visible) }
     }

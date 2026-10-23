@@ -176,7 +176,7 @@ private struct StatusLabel: View {
     }
     if model.launcherRunning { return ("Im Launcher auf Launch klicken", "hand.tap.fill", .orange) }
     if model.steamBootstrapping { return ("Steam sucht nach Updates", "arrow.triangle.2.circlepath", .secondary) }
-    if let title = model.runner.runningTitle { return (title, "hourglass", .secondary) }
+    if let title = model.runner.runningTitle { return (model.runner.status ?? title, "hourglass", .secondary) }
     if model.launchStarted != nil { return ("Steam bereitet BeamNG vor", "hourglass", .secondary) }
     if model.steamRunning { return ("Steam läuft", "circle.fill", .secondary) }
     return ("Bereit", "checkmark.circle.fill", .green)
