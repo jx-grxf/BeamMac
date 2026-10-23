@@ -134,6 +134,10 @@ configure_steam_app() {
 # a second, blank icon next to Steam's window. As a UI element it stays out;
 # Wine still brings a process into the Dock once it shows a window, and then
 # the bundle icon is what it gets.
+# Every other Wine process, the game included, is started as
+# Contents/lib/wine/../../bin/wine, which macOS does not see as part of the
+# bundle: no name, no icon and no Game Mode. A copy of Info.plist next to the
+# binary makes bin/ a flat bundle of its own with the same identity.
 engine_icon() {
   local icon
   for icon in "$ROOT/../AppIcon.icns" "$ROOT/Assets/AppIcon.icns"; do
@@ -149,18 +153,20 @@ finish_engine_bundle() {
     mkdir -p "$app/Contents/Resources"
     cp "$icon" "$app/Contents/Resources/AppIcon.icns"
     plutil -replace CFBundleIconFile -string AppIcon "$app/Contents/Info.plist"
+    cp "$icon" "$app/Contents/MacOS/AppIcon.icns"
   fi
+  cp "$app/Contents/Info.plist" "$app/Contents/MacOS/Info.plist"
   # Launch Services caches bundle info and would keep the old Dock behavior.
   touch "$app"
   /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app" 2>/dev/null || true
 }
 
-# Engines set up before finish_engine_bundle existed.
+# Engines set up before finish_engine_bundle existed, or rewritten by bin/setup.
 update_engine_bundles() {
   local app
   for app in "$ENGINES"/*.app; do
     [[ -f "$app/Contents/Info.plist" ]] || continue
-    [[ "$(plutil -extract LSUIElement raw "$app/Contents/Info.plist" 2>/dev/null)" == true ]] && continue
+    cmp -s "$app/Contents/Info.plist" "$app/Contents/MacOS/Info.plist" && continue
     finish_engine_bundle "$app"
   done
 }
