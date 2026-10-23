@@ -69,6 +69,28 @@ regex_escape() { printf '%s' "$1" | sed 's/[][\\.*^$()+?{}|]/\\&/g'; }
 
 steam_running() { pgrep -qf "$(regex_escape "$(steam_exe)")"; }
 
+HANDOFF_TIMEOUT=30
+LOGIN_TIMEOUT=120
+
+# Steam sets ActiveUser once an account is logged in and clears it on quit.
+# Reading it through reg.exe sees the live value; user.reg lags behind.
+steam_logged_in() {
+  run_wine "$BACKEND" reg query 'HKCU\Software\Valve\Steam\ActiveProcess' /v ActiveUser 2>/dev/null \
+    | grep -q 'REG_DWORD[[:space:]]*0x0*[1-9a-f]'
+}
+
+wait_for_steam_login() {
+  local start=$SECONDS
+  steam_logged_in && return 0
+  log "Warte, bis Steam angemeldet ist"
+  while (( SECONDS - start < LOGIN_TIMEOUT )); do
+    steam_running || return 1
+    sleep 2
+    steam_logged_in && return 0
+  done
+  return 1
+}
+
 # Steam's bootstrapper checks for client updates on every start, and under Wine
 # that first request hangs for a 60 s timeout. steam.cfg turns the check off;
 # once a week a start runs without it so the client stays current.
@@ -105,6 +127,41 @@ configure_steam_app() {
       }
       { print }
     ' "$f" >"$f.beammac" && mv "$f.beammac" "$f"
+  done
+}
+
+# steam.exe runs straight from the engine bundle and would sit in the Dock as
+# a second, blank icon next to Steam's window. As a UI element it stays out;
+# Wine still brings a process into the Dock once it shows a window, and then
+# the bundle icon is what it gets.
+engine_icon() {
+  local icon
+  for icon in "$ROOT/../AppIcon.icns" "$ROOT/Assets/AppIcon.icns"; do
+    [[ -f "$icon" ]] && { echo "$icon"; return 0; }
+  done
+  return 1
+}
+
+finish_engine_bundle() {
+  local app="$1" icon
+  plutil -replace LSUIElement -bool true "$app/Contents/Info.plist"
+  if icon="$(engine_icon)"; then
+    mkdir -p "$app/Contents/Resources"
+    cp "$icon" "$app/Contents/Resources/AppIcon.icns"
+    plutil -replace CFBundleIconFile -string AppIcon "$app/Contents/Info.plist"
+  fi
+  # Launch Services caches bundle info and would keep the old Dock behavior.
+  touch "$app"
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app" 2>/dev/null || true
+}
+
+# Engines set up before finish_engine_bundle existed.
+update_engine_bundles() {
+  local app
+  for app in "$ENGINES"/*.app; do
+    [[ -f "$app/Contents/Info.plist" ]] || continue
+    [[ "$(plutil -extract LSUIElement raw "$app/Contents/Info.plist" 2>/dev/null)" == true ]] && continue
+    finish_engine_bundle "$app"
   done
 }
 

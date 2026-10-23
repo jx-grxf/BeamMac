@@ -37,6 +37,7 @@ done
 # bin/beammp reads these; whoever starts the wineserver first decides MSync for it.
 export BEAMNG_BACKEND="$BACKEND" BEAMNG_UPSCALER="$UPSCALER" BEAMNG_PACK="$PACK"
 mkdir -p "$DATA/logs"
+update_engine_bundles
 case "$UPSCALER" in
   metalfx) set_game_retina n ;;
   game|off) set_game_retina y ;;
@@ -48,13 +49,31 @@ esac
 # launch as is; dxmt.conf is read by the game itself on every start.
 session="$BACKEND hud=${BEAMNG_HUD:-0} upscaler=$UPSCALER pack=$PACK"
 session_file="$DATA/steam-session"
+# A second steam.exe hands its arguments to the running client and exits
+# within seconds. While that client is still starting up (BeamMac starts it in
+# the background on launch) the handoff hangs for good and the game never
+# starts, so wait for the login first and restart Steam if it never comes.
+hand_off() {
+  local pid
+  ( wine_env "$BACKEND"; exec "$(wine_bin "$BACKEND")" "$(steam_exe)" "$@" ) >>"$DATA/logs/steam.log" 2>&1 &
+  pid=$!
+  for _ in $(seq "$HANDOFF_TIMEOUT"); do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 1
+  done
+  kill -9 "$pid" 2>/dev/null
+  return 1
+}
+
 if [[ -z "$update_steam" ]] && steam_running && [[ -n "$steam_only" || "$(cat "$session_file" 2>/dev/null)" == "$session" ]]; then
   log "Steam läuft schon"
-  [[ -n "$multiplayer" ]] && "$(dirname "$0")/beammp" start
-  # A second steam.exe hands its arguments to the running client and exits.
-  run_wine "$BACKEND" "$(steam_exe)" ${steam_args[@]+"${steam_args[@]}"} >>"$DATA/logs/steam.log" 2>&1 &
-  disown
-  exit 0
+  if [[ -z "$steam_only" ]] && ! wait_for_steam_login; then
+    log "Steam meldet sich nicht an, starte neu"
+  else
+    [[ -n "$multiplayer" ]] && "$(dirname "$0")/beammp" start
+    hand_off ${steam_args[@]+"${steam_args[@]}"} && exit 0
+    log "Steam hat den Start nicht angenommen, starte neu"
+  fi
 fi
 
 "$(dirname "$0")/stop" >/dev/null

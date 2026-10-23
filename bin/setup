@@ -36,6 +36,7 @@ write_engine_plist() {
 </dict>
 </plist>
 PLIST
+  finish_engine_bundle "$app"
 }
 
 STEPS=6

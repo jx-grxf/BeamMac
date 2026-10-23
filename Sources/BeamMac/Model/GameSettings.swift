@@ -202,7 +202,9 @@ final class GameSettings {
 
   func write(to userFolder: URL, gameDirectory: URL, launch: LaunchSettings) throws {
     let settingsURL = userFolder.appending(path: "settings/settings.json")
-    var values = (try? Self.readJSON(settingsURL)) ?? [:]
+    // A file that exists but does not parse stops the launch: writing only our
+    // keys would throw away every other setting the player made.
+    var values = FileManager.default.fileExists(atPath: settingsURL.path) ? try Self.readJSON(settingsURL) : [:]
 
     let presetsURL = gameDirectory.appending(path: "lua/ge/extensions/core/settings/settingsPresets.json")
     if let presets = try? Self.readJSON(presetsURL), let preset = presets[quality.rawValue] as? [String: Any] {
@@ -256,25 +258,35 @@ final class GameSettings {
     try writeKeyboardMap(in: userFolder)
   }
 
+  private static let wasdBindings: [[String: String]] = [
+    ["control": "w", "action": "accelerate"],
+    ["control": "s", "action": "brake"],
+    ["control": "a", "action": "steer_left"],
+    ["control": "d", "action": "steer_right"],
+  ]
+
   /// BeamNG drives with the arrow keys and moves the free camera with WASD.
-  /// The diff adds WASD to driving and keeps every default binding.
+  /// The diff adds WASD to driving and keeps every default binding. Bindings
+  /// the player set in the game live in the same file and stay untouched.
   private func writeKeyboardMap(in userFolder: URL) throws {
     let url = userFolder.appending(path: "settings/inputmaps/keyboard.diff")
-    guard wasdSteering else {
-      if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+    let exists = FileManager.default.fileExists(atPath: url.path)
+    guard wasdSteering || exists else { return }
+    var diff = exists ? try Self.readJSON(url) : ["displayName": "Keyboard", "imagePack": "keyboard", "version": 1]
+    let isWASD = { (binding: Any) in
+      guard let binding = binding as? [String: Any] else { return false }
+      return Self.wasdBindings.contains {
+        $0["control"] == binding["control"] as? String && $0["action"] == binding["action"] as? String
+      }
+    }
+    var bindings = ((diff["bindings"] as? [Any]) ?? []).filter { !isWASD($0) }
+    if wasdSteering {
+      bindings += Self.wasdBindings as [Any]
+    } else if bindings.isEmpty && Set(diff.keys).isSubset(of: ["displayName", "imagePack", "version", "bindings"]) {
+      try FileManager.default.removeItem(at: url)
       return
     }
-    let diff: [String: Any] = [
-      "displayName": "Keyboard",
-      "imagePack": "keyboard",
-      "version": 1,
-      "bindings": [
-        ["control": "w", "action": "accelerate"],
-        ["control": "s", "action": "brake"],
-        ["control": "a", "action": "steer_left"],
-        ["control": "d", "action": "steer_right"],
-      ],
-    ]
+    diff["bindings"] = bindings
     try Self.writeJSON(diff, to: url)
   }
 
