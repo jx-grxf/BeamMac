@@ -8,7 +8,7 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="BeamMac"
 BUNDLE_ID="at.johannesgrof.BeamMac"
-APP_VERSION="${BEAMMAC_VERSION:-0.1.0}"
+APP_VERSION="${BEAMMAC_VERSION:-0.1.1}"
 CONFIGURATION="${BEAMMAC_CONFIGURATION:-release}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
